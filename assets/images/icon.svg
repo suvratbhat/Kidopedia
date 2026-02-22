@@ -1,0 +1,62 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background Circle -->
+  <circle cx="512" cy="512" r="512" fill="url(#gradient1)"/>
+
+  <!-- Decorative Stars -->
+  <circle cx="200" cy="200" r="40" fill="#FFF9C4" opacity="0.6"/>
+  <circle cx="824" cy="150" r="30" fill="#FFF9C4" opacity="0.6"/>
+  <circle cx="150" cy="800" r="35" fill="#FFF9C4" opacity="0.6"/>
+  <circle cx="850" cy="750" r="25" fill="#FFF9C4" opacity="0.6"/>
+
+  <!-- Open Book Base -->
+  <path d="M 150 400 Q 150 350 200 350 L 450 350 Q 512 350 512 420 Q 512 350 574 350 L 824 350 Q 874 350 874 400 L 874 750 Q 874 780 844 780 L 574 780 Q 512 780 512 700 Q 512 780 450 780 L 180 780 Q 150 780 150 750 Z" fill="#FFFFFF" stroke="#6A4C93" stroke-width="8"/>
+
+  <!-- Book Spine Shadow -->
+  <rect x="505" y="350" width="14" height="430" fill="#E8E8E8"/>
+
+  <!-- Left Page Details -->
+  <line x1="220" y1="420" x2="440" y2="420" stroke="#42A5F5" stroke-width="10" stroke-linecap="round"/>
+  <line x1="220" y1="470" x2="420" y2="470" stroke="#66BB6A" stroke-width="8" stroke-linecap="round"/>
+  <line x1="220" y1="510" x2="440" y2="510" stroke="#FFA726" stroke-width="8" stroke-linecap="round"/>
+  <line x1="220" y1="550" x2="380" y2="550" stroke="#EC407A" stroke-width="8" stroke-linecap="round"/>
+
+  <!-- Right Page - Cute Character (Bear) -->
+  <!-- Bear Head -->
+  <circle cx="700" cy="520" r="80" fill="#8D6E63"/>
+  <!-- Left Ear -->
+  <circle cx="650" cy="470" r="35" fill="#8D6E63"/>
+  <!-- Right Ear -->
+  <circle cx="750" cy="470" r="35" fill="#8D6E63"/>
+  <!-- Inner Left Ear -->
+  <circle cx="650" cy="475" r="20" fill="#D7CCC8"/>
+  <!-- Inner Right Ear -->
+  <circle cx="750" cy="475" r="20" fill="#D7CCC8"/>
+  <!-- Snout -->
+  <ellipse cx="700" cy="540" rx="35" ry="30" fill="#D7CCC8"/>
+  <!-- Nose -->
+  <ellipse cx="700" cy="535" rx="15" ry="12" fill="#4E342E"/>
+  <!-- Left Eye -->
+  <circle cx="675" cy="510" r="10" fill="#4E342E"/>
+  <!-- Right Eye -->
+  <circle cx="725" cy="510" r="10" fill="#4E342E"/>
+  <!-- Smile -->
+  <path d="M 680 545 Q 700 555 720 545" stroke="#4E342E" stroke-width="3" fill="none" stroke-linecap="round"/>
+
+  <!-- Sparkles around bear -->
+  <path d="M 620 600 L 625 610 L 630 600 L 625 590 Z" fill="#FFD54F"/>
+  <path d="M 780 580 L 785 590 L 790 580 L 785 570 Z" fill="#FFD54F"/>
+  <path d="M 760 650 L 765 660 L 770 650 L 765 640 Z" fill="#FFD54F"/>
+
+  <!-- Cute Stars -->
+  <path d="M 584 450 L 588 462 L 600 462 L 590 470 L 594 482 L 584 474 L 574 482 L 578 470 L 568 462 L 580 462 Z" fill="#42A5F5"/>
+  <path d="M 820 520 L 824 532 L 836 532 L 826 540 L 830 552 L 820 544 L 810 552 L 814 540 L 804 532 L 816 532 Z" fill="#EC407A"/>
+
+  <!-- Gradients -->
+  <defs>
+    <linearGradient id="gradient1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FFA726;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#FF7043;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#FF5252;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+</svg>

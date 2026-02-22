@@ -1,0 +1,111 @@
+name: Build Kidopedia APK
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Expo
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+        continue-on-error: true
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Create .env file
+        run: |
+          echo "EXPO_PUBLIC_SUPABASE_URL=${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}" >> .env
+          echo "EXPO_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}" >> .env
+
+      - name: Verify environment
+        run: |
+          echo "Node version: $(node --version)"
+          echo "NPM version: $(npm --version)"
+          echo "Java version: $(java -version 2>&1 | head -n 1)"
+          echo "Checking .env file..."
+          ls -la .env || echo ".env not found"
+
+      - name: Prebuild Android
+        run: |
+          echo "Starting Expo prebuild..."
+          npx expo prebuild --platform android --clean
+          echo "Prebuild complete. Checking android directory..."
+          ls -la android/ || echo "Android directory not created"
+
+      - name: Make Gradlew executable
+        run: chmod +x android/gradlew
+
+      - name: Build Android APK
+        working-directory: ./android
+        run: |
+          echo "Starting Gradle build..."
+          ./gradlew assembleRelease --no-daemon --stacktrace
+          echo "Gradle build complete"
+
+      - name: Find and Rename APK
+        if: success()
+        run: |
+          SIGNED_APK_PATH="kidopedia-${{ github.sha }}.apk"
+
+          echo "Searching for APK files..."
+          find android/app/build/outputs -name "*.apk" -type f
+
+          APK_PATH=$(find android/app/build/outputs/apk/release -name "*.apk" -type f | head -n 1)
+
+          if [ -n "$APK_PATH" ] && [ -f "$APK_PATH" ]; then
+            echo "Found APK at: $APK_PATH"
+            cp "$APK_PATH" "$SIGNED_APK_PATH"
+            ls -lh "$SIGNED_APK_PATH"
+          else
+            echo "Error: APK not found"
+            echo "Contents of android/app/build/outputs:"
+            find android/app/build/outputs -type f
+            exit 1
+          fi
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: kidopedia-${{ github.sha }}
+          path: kidopedia-${{ github.sha }}.apk
+          retention-days: 30
+
+      - name: Build Summary
+        if: always()
+        run: |
+          echo "### Build Complete!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Download the APK from the artifacts section above." >> $GITHUB_STEP_SUMMARY
