@@ -19,7 +19,7 @@
 
 const {
   withAndroidManifest,
-  withDangerousMods,
+  withDangerousMod,
 } = require('@expo/config-plugins');
 const path = require('path');
 const fs = require('fs');
@@ -27,9 +27,9 @@ const fs = require('fs');
 // ── 1. Copy network_security_config.xml into res/xml/ ────────────────────────
 
 function withNetworkSecurityConfig(config) {
-  // withDangerousMods runs after the android project skeleton is created, so
+  // withDangerousMod runs after the android project skeleton is created, so
   // the res/ tree already exists (or we create it here).
-  return withDangerousMods(config, [
+  return withDangerousMod(config, [
     'android',
     async (config) => {
       const { platformProjectRoot, projectRoot } = config.modRequest;
@@ -135,7 +135,7 @@ const OKHTTP_PROGUARD_RULES = `
 `;
 
 function withOkHttpProguardRules(config) {
-  return withDangerousMods(config, [
+  return withDangerousMod(config, [
     'android',
     async (config) => {
       const { platformProjectRoot } = config.modRequest;
