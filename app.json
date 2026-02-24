@@ -15,7 +15,7 @@
     },
     "android": {
       "package": "com.kidopedia.app",
-      "versionCode": 3,
+      "versionCode": 4,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#FFA726"
@@ -26,8 +26,7 @@
         "android.permission.ACCESS_WIFI_STATE",
         "android.permission.RECORD_AUDIO"
       ],
-      "usesCleartextTraffic": false,
-      "networkSecurityConfig": "./network_security_config.xml"
+      "usesCleartextTraffic": false
     },
     "ios": {
       "supportsTablet": true,
@@ -39,6 +38,7 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      "./plugins/withAndroidNetworkFix",
       "expo-router",
       "expo-font",
       "expo-web-browser",

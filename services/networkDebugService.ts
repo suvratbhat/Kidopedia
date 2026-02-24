@@ -15,6 +15,7 @@ class NetworkDebugService {
 
     results.push(await this.testEnvironmentVariables());
     results.push(await this.testDNSResolution());
+    results.push(await this.testThirdPartyHTTPS());
     results.push(await this.testHTTPSConnection());
     results.push(await this.testSupabaseEndpoint());
     results.push(await this.testWithDifferentHeaders());
@@ -74,6 +75,40 @@ class NetworkDebugService {
           error: error.message,
           name: error.name,
         }
+      };
+    }
+  }
+
+  // Tests a non-Supabase HTTPS endpoint to determine if failures are
+  // Supabase-specific (TLS fingerprint / IP block) or affect all HTTPS.
+  private async testThirdPartyHTTPS(): Promise<NetworkTestResult> {
+    try {
+      const testUrl = 'https://httpbin.org/get';
+      console.log('[NetworkDebug] Testing third-party HTTPS (httpbin.org)...');
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+      const response = await fetch(testUrl, {
+        method: 'GET',
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      return {
+        test: 'Third-party HTTPS (httpbin.org)',
+        success: true,
+        message: `Reachable — status ${response.status}`,
+        details: { status: response.status },
+      };
+    } catch (error: any) {
+      console.error('[NetworkDebug] Third-party HTTPS test failed:', error);
+      return {
+        test: 'Third-party HTTPS (httpbin.org)',
+        success: false,
+        message: `Failed: ${error.message}`,
+        details: { error: error.message, name: error.name, code: (error as any).code },
       };
     }
   }

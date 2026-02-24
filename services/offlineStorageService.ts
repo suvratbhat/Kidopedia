@@ -1,7 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { sqliteService } from './sqliteService';
+import { CachedWord } from '@/types/dictionary';
 
 class OfflineStorageService {
   private STORAGE_PREFIX = '@kidopedia_';
+
+  // ── AsyncStorage-backed (legacy) ─────────────────────────────────────────────
 
   async saveSearchHistory(word: string): Promise<void> {
     try {
@@ -42,16 +46,6 @@ class OfflineStorageService {
     }
   }
 
-  async getCachedWord(word: string): Promise<any> {
-    try {
-      const data = await AsyncStorage.getItem(`${this.STORAGE_PREFIX}word_${word}`);
-      return data ? JSON.parse(data) : null;
-    } catch (error) {
-      console.error('Error getting cached word:', error);
-      return null;
-    }
-  }
-
   async saveAppData(key: string, value: any): Promise<void> {
     try {
       await AsyncStorage.setItem(`${this.STORAGE_PREFIX}${key}`, JSON.stringify(value));
@@ -78,6 +72,36 @@ class OfflineStorageService {
     } catch (error) {
       console.error('Error clearing all data:', error);
     }
+  }
+
+  // ── SQLite-backed (primary word store) ──────────────────────────────────────
+
+  async getCachedWord(word: string): Promise<CachedWord | null> {
+    return sqliteService.getWord(word);
+  }
+
+  async cacheWord(wordData: CachedWord): Promise<void> {
+    await sqliteService.upsertWord(wordData);
+  }
+
+  async searchCachedWords(query: string, limit: number = 20): Promise<CachedWord[]> {
+    return sqliteService.searchWords(query, limit);
+  }
+
+  async getAllCachedWords(): Promise<CachedWord[]> {
+    return sqliteService.getAllCachedWords();
+  }
+
+  async getRandomCachedWord(): Promise<CachedWord | null> {
+    return sqliteService.getRandomWord();
+  }
+
+  async getRecentSearches(profileId?: string): Promise<string[]> {
+    return sqliteService.getRecentSearches(profileId ?? null, 20);
+  }
+
+  async addRecentSearch(word: string, profileId?: string): Promise<void> {
+    await sqliteService.addRecentSearch(profileId ?? null, word);
   }
 }
 

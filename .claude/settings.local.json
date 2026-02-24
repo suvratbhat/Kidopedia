@@ -1,7 +1,14 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git config:*)"
+      "Bash(git config:*)",
+      "Bash(ls:*)",
+      "Bash(npx tsc:*)",
+      "Bash(node_modules/.bin/tsc:*)",
+      "Bash(npx --no-install tsc:*)",
+      "Bash(/d/Kidopedia/node_modules/.bin/tsc:*)",
+      "Bash(node /d/Kidopedia/node_modules/typescript/bin/tsc:*)",
+      "Bash(xargs basename:*)"
     ]
   }
 }

@@ -3,9 +3,14 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'rea
 import { KidButton } from '../../components/KidButton';
 import { offlineStorageService } from '../../services/offlineStorageService';
 import { offlineDownloadService, DownloadProgress } from '../../services/offlineDownloadService';
+import { syncService } from '../../services/syncService';
 import { pronunciationService } from '../../services/pronunciationService';
 import { connectionTestService } from '../../services/connectionTestService';
-import { Volume2, Calendar, Info, BookOpen, Download, Trash2, HardDrive, Activity } from 'lucide-react-native';
+import { SyncStatus } from '../../types/sync';
+import {
+  Volume2, Calendar, Info, BookOpen, Download, Trash2,
+  Activity, RefreshCw, XCircle,
+} from 'lucide-react-native';
 
 export default function SettingsScreen() {
   const [wordCount, setWordCount] = useState(0);
@@ -19,6 +24,7 @@ export default function SettingsScreen() {
   });
   const [downloadProgress, setDownloadProgress] = useState<DownloadProgress | null>(null);
   const [storageSize, setStorageSize] = useState('0 B');
+  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
 
   useEffect(() => {
     loadSettings();
@@ -34,7 +40,7 @@ export default function SettingsScreen() {
       const cachedWords = await offlineStorageService.getAllCachedWords();
       setWordCount(cachedWords.length);
 
-      const speed = pronunciationService.getSpeed();
+      const speed = pronunciationService.getRate();
       setPronunciationSpeed(speed);
 
       const status = await offlineDownloadService.getDownloadStatus();
@@ -45,13 +51,33 @@ export default function SettingsScreen() {
 
       const size = await offlineDownloadService.getStorageSize();
       setStorageSize(offlineDownloadService.formatStorageSize(size));
+
+      const sync = await syncService.getSyncStatus();
+      setSyncStatus(sync);
     } catch (error) {
       console.error('Error loading settings:', error);
     }
   };
 
+  // ── Sync handlers ────────────────────────────────────────────────────────────
+
+  const handleSyncNow = () => {
+    syncService.forceSync((status) => {
+      setSyncStatus(status);
+    }).then(() => loadSettings()).catch((err) => {
+      console.error('[Settings] Sync failed:', err);
+      syncService.getSyncStatus().then(setSyncStatus).catch(() => {});
+    });
+  };
+
+  const handleCancelSync = () => {
+    syncService.cancelSync();
+  };
+
+  // ── Download handlers ────────────────────────────────────────────────────────
+
   const handleSpeedChange = (speed: number) => {
-    pronunciationService.setSpeed(speed);
+    pronunciationService.setRate(speed);
     setPronunciationSpeed(speed);
   };
 
@@ -81,7 +107,7 @@ export default function SettingsScreen() {
   const handleStartDownload = async () => {
     Alert.alert(
       'Download Dictionary',
-      'This will download 10,000 common words with translations for offline use. This may take a few minutes.',
+      'This will download common words with translations for offline use. This may take a few minutes.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -171,6 +197,41 @@ export default function SettingsScreen() {
     );
   };
 
+  // ── Sync status helpers ──────────────────────────────────────────────────────
+
+  const isSyncing = syncStatus?.status === 'in_progress';
+
+  const getSyncBadgeStyle = () => {
+    if (!syncStatus) return styles.badgeNeutral;
+    switch (syncStatus.status) {
+      case 'completed': return styles.badgeGreen;
+      case 'in_progress': return styles.badgeBlue;
+      case 'failed': return styles.badgeRed;
+      default: return styles.badgeNeutral;
+    }
+  };
+
+  const getSyncBadgeText = () => {
+    if (!syncStatus) return 'Unknown';
+    if (syncStatus.status === 'in_progress') return 'Syncing…';
+    if (syncStatus.status === 'completed') {
+      if (syncStatus.daysUntilNextSync !== null && syncStatus.daysUntilNextSync < 0) return 'Overdue';
+      return 'Up to date';
+    }
+    if (syncStatus.status === 'failed') return 'Failed';
+    return 'Never synced';
+  };
+
+  const getSyncScheduleText = () => {
+    if (!syncStatus?.daysUntilNextSync) return null;
+    const days = syncStatus.daysUntilNextSync;
+    if (days < 0) return { text: `Overdue by ${Math.abs(days)} day${Math.abs(days) !== 1 ? 's' : ''}`, overdue: true };
+    if (days === 0) return { text: 'Sync due today', overdue: true };
+    return { text: `Next sync in ${days} day${days !== 1 ? 's' : ''}`, overdue: false };
+  };
+
+  const scheduleInfo = getSyncScheduleText();
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -179,6 +240,77 @@ export default function SettingsScreen() {
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+
+        {/* ── Dictionary Sync ──────────────────────────────────────────────── */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <RefreshCw size={24} color="#3B82F6" />
+            <Text style={styles.sectionTitle}>Dictionary Sync</Text>
+          </View>
+
+          <View style={styles.syncRow}>
+            <View style={[styles.badge, getSyncBadgeStyle()]}>
+              <Text style={styles.badgeText}>{getSyncBadgeText()}</Text>
+            </View>
+            {syncStatus?.lastCompletedAt && (
+              <Text style={styles.syncMeta}>
+                Last synced: {new Date(syncStatus.lastCompletedAt).toLocaleDateString()}
+              </Text>
+            )}
+          </View>
+
+          {scheduleInfo && (
+            <Text style={[styles.syncSchedule, scheduleInfo.overdue && styles.syncScheduleOverdue]}>
+              {scheduleInfo.text}
+            </Text>
+          )}
+
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Words downloaded</Text>
+            <Text style={styles.infoValue}>
+              {(syncStatus?.wordsTotal > 0 ? syncStatus.wordsTotal : wordCount).toLocaleString()}
+            </Text>
+          </View>
+
+          {isSyncing && (
+            <View style={styles.syncProgressContainer}>
+              <View style={styles.progressInfo}>
+                <Text style={styles.progressText}>Syncing words…</Text>
+                <Text style={styles.progressPercentage}>{syncStatus?.percentage ?? 0}%</Text>
+              </View>
+              <View style={styles.progressBar}>
+                <View
+                  style={[styles.progressFill, { width: `${syncStatus?.percentage ?? 0}%` }]}
+                />
+              </View>
+              <Text style={styles.progressDetail}>
+                {syncStatus?.wordsCompleted.toLocaleString()} / {syncStatus?.wordsTotal.toLocaleString()} words
+              </Text>
+            </View>
+          )}
+
+          <View style={styles.syncActions}>
+            {!isSyncing ? (
+              <KidButton
+                title="Sync Now"
+                onPress={handleSyncNow}
+                variant="primary"
+                size="medium"
+                icon={<RefreshCw size={20} color="#fff" />}
+              />
+            ) : (
+              <KidButton
+                title="Cancel Sync"
+                onPress={handleCancelSync}
+                variant="secondary"
+                size="medium"
+                icon={<XCircle size={20} color="#fff" />}
+              />
+            )}
+          </View>
+        </View>
+
+        {/* ── Offline Dictionary ───────────────────────────────────────────── */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Download size={24} color="#4CAF50" />
@@ -189,7 +321,7 @@ export default function SettingsScreen() {
             <View style={styles.downloadInfo}>
               <Text style={styles.downloadTitle}>Download for Offline Use</Text>
               <Text style={styles.downloadDescription}>
-                Download 10,000 common words with definitions, translations, and pronunciation for full offline access.
+                Download common words with definitions, translations, and pronunciation for full offline access.
               </Text>
             </View>
 
@@ -216,7 +348,7 @@ export default function SettingsScreen() {
                 <KidButton
                   title="Delete Offline Data"
                   onPress={handleDeleteOfflineData}
-                  variant="warning"
+                  variant="secondary"
                   size="small"
                   icon={<Trash2 size={18} color="#fff" />}
                 />
@@ -255,6 +387,7 @@ export default function SettingsScreen() {
           </View>
         </View>
 
+        {/* ── Cache Storage ────────────────────────────────────────────────── */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <BookOpen size={24} color="#FF6B6B" />
@@ -276,12 +409,12 @@ export default function SettingsScreen() {
           <KidButton
             title="Clear Cache"
             onPress={handleClearCache}
-            variant="warning"
+            variant="secondary"
             size="medium"
-            style={styles.actionButton}
           />
         </View>
 
+        {/* ── Pronunciation Speed ──────────────────────────────────────────── */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Volume2 size={24} color="#4ECDC4" />
@@ -290,58 +423,35 @@ export default function SettingsScreen() {
 
           <View style={styles.speedOptions}>
             <TouchableOpacity
-              style={[
-                styles.speedButton,
-                pronunciationSpeed === 0.5 && styles.speedButtonActive,
-              ]}
+              style={[styles.speedButton, pronunciationSpeed === 0.5 && styles.speedButtonActive]}
               onPress={() => handleSpeedChange(0.5)}
             >
-              <Text
-                style={[
-                  styles.speedButtonText,
-                  pronunciationSpeed === 0.5 && styles.speedButtonTextActive,
-                ]}
-              >
+              <Text style={[styles.speedButtonText, pronunciationSpeed === 0.5 && styles.speedButtonTextActive]}>
                 Slow
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[
-                styles.speedButton,
-                pronunciationSpeed === 0.75 && styles.speedButtonActive,
-              ]}
+              style={[styles.speedButton, pronunciationSpeed === 0.75 && styles.speedButtonActive]}
               onPress={() => handleSpeedChange(0.75)}
             >
-              <Text
-                style={[
-                  styles.speedButtonText,
-                  pronunciationSpeed === 0.75 && styles.speedButtonTextActive,
-                ]}
-              >
+              <Text style={[styles.speedButtonText, pronunciationSpeed === 0.75 && styles.speedButtonTextActive]}>
                 Normal
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[
-                styles.speedButton,
-                pronunciationSpeed === 1.0 && styles.speedButtonActive,
-              ]}
+              style={[styles.speedButton, pronunciationSpeed === 1.0 && styles.speedButtonActive]}
               onPress={() => handleSpeedChange(1.0)}
             >
-              <Text
-                style={[
-                  styles.speedButtonText,
-                  pronunciationSpeed === 1.0 && styles.speedButtonTextActive,
-                ]}
-              >
+              <Text style={[styles.speedButtonText, pronunciationSpeed === 1.0 && styles.speedButtonTextActive]}>
                 Fast
               </Text>
             </TouchableOpacity>
           </View>
         </View>
 
+        {/* ── Privacy ──────────────────────────────────────────────────────── */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Calendar size={24} color="#FFD93D" />
@@ -351,11 +461,12 @@ export default function SettingsScreen() {
           <KidButton
             title="Clear Search History"
             onPress={handleClearHistory}
-            variant="warning"
+            variant="secondary"
             size="medium"
           />
         </View>
 
+        {/* ── Diagnostics ──────────────────────────────────────────────────── */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Activity size={24} color="#9C27B0" />
@@ -378,11 +489,12 @@ export default function SettingsScreen() {
           />
         </View>
 
+        {/* ── About ────────────────────────────────────────────────────────── */}
         <View style={styles.aboutSection}>
           <Text style={styles.aboutTitle}>Kidopedia</Text>
           <Text style={styles.aboutVersion}>Version 1.0.0</Text>
           <Text style={styles.aboutDescription}>
-            A fun learning app powered by Google Dictionary API with offline support. Search for any word and get comprehensive definitions, examples, synonyms, and more!
+            A fun offline-first learning app. Search for any word and get comprehensive definitions, examples, and translations to Kannada and Hindi — even without internet!
           </Text>
         </View>
 
@@ -441,6 +553,46 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: '#333',
+  },
+  syncRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 8,
+  },
+  badge: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  badgeGreen: { backgroundColor: '#DCFCE7' },
+  badgeBlue: { backgroundColor: '#DBEAFE' },
+  badgeRed: { backgroundColor: '#FEE2E2' },
+  badgeNeutral: { backgroundColor: '#F3F4F6' },
+  badgeText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#333',
+  },
+  syncMeta: {
+    fontSize: 13,
+    color: '#888',
+  },
+  syncSchedule: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 12,
+  },
+  syncScheduleOverdue: {
+    color: '#EF4444',
+    fontWeight: '600',
+  },
+  syncProgressContainer: {
+    gap: 8,
+    marginBottom: 16,
+  },
+  syncActions: {
+    marginTop: 8,
   },
   infoRow: {
     flexDirection: 'row',

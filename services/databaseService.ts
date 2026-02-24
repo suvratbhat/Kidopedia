@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { CachedWord, DictionaryAPIResponse } from '../types/dictionary';
 import { offlineStorageService } from './offlineStorageService';
+import { sqliteService } from './sqliteService';
 import { COMMON_WORDS } from './commonWords';
 import { contentFilterService } from './contentFilterService';
 
@@ -106,16 +107,39 @@ export class DatabaseService {
       contentFlags.push('All definitions contain inappropriate content');
     }
 
+    const now = new Date().toISOString();
+    const cachedWord: CachedWord = {
+      id: '',
+      word: wordData.word.toLowerCase(),
+      phonetic: wordData.phonetic ?? '',
+      audio_url: wordData.audioUrl ?? '',
+      meanings: filteredMeanings,
+      origin: wordData.origin ?? '',
+      kannada_translation: wordData.kannadaTranslation || '',
+      hindi_translation: wordData.hindiTranslation || '',
+      is_age_appropriate: isAppropriate,
+      min_age: minAge,
+      content_flags: contentFlags,
+      complexity_level: complexityLevel,
+      search_count: 0,
+      created_at: now,
+      updated_at: now,
+    };
+
+    // Write to local SQLite immediately (works offline on next lookup)
+    await sqliteService.upsertWord(cachedWord).catch(() => {});
+
+    // Also write to Supabase if online
     const { data, error } = await supabase
       .from('cached_words')
       .upsert({
-        word: wordData.word.toLowerCase(),
-        phonetic: wordData.phonetic,
-        audio_url: wordData.audioUrl,
+        word: cachedWord.word,
+        phonetic: cachedWord.phonetic,
+        audio_url: cachedWord.audio_url,
         meanings: filteredMeanings,
-        origin: wordData.origin,
-        kannada_translation: wordData.kannadaTranslation || '',
-        hindi_translation: wordData.hindiTranslation || '',
+        origin: cachedWord.origin,
+        kannada_translation: cachedWord.kannada_translation,
+        hindi_translation: cachedWord.hindi_translation,
         is_age_appropriate: isAppropriate,
         min_age: minAge,
         content_flags: contentFlags,
@@ -128,21 +152,25 @@ export class DatabaseService {
       .maybeSingle();
 
     if (error) {
-      console.error('❌ Error caching word in DB:', error);
-      return null;
+      console.error('❌ Error caching word in Supabase:', error);
+      // Return the locally-cached version so the user still sees the word
+      return cachedWord;
     }
 
     console.log('✅ Word cached in DB successfully');
-    return data;
+    return data ?? cachedWord;
   }
 
   async incrementSearchCount(word: string): Promise<void> {
-    const { error } = await supabase
-      .rpc('increment_word_search_count', { word_text: word.toLowerCase() });
+    // Update local SQLite count
+    await sqliteService.incrementWordSearchCount(word).catch(() => {});
 
-    if (error) {
-      console.error('Error incrementing search count:', error);
-    }
+    // Best-effort Supabase increment (online only)
+    Promise.resolve(supabase.rpc('increment_word_search_count', { word_text: word.toLowerCase() }))
+      .then(({ error }) => {
+        if (error) console.error('Error incrementing search count:', error);
+      })
+      .catch(() => {});
   }
 
   async searchWords(query: string, limit: number = 20): Promise<CachedWord[]> {
@@ -155,11 +183,13 @@ export class DatabaseService {
 
     const searchQuery = sanitized.sanitized;
 
+    // SQLite first (works offline)
     const cachedResults = await offlineStorageService.searchCachedWords(searchQuery, limit);
     if (cachedResults.length > 0) {
       return this.filterWordsByAge(cachedResults);
     }
 
+    // Supabase fallback (online only)
     const { data, error } = await supabase
       .from('cached_words')
       .select('*')
@@ -204,9 +234,10 @@ export class DatabaseService {
       return null;
     }
 
+    // 1. SQLite (works offline)
     const localCache = await offlineStorageService.getCachedWord(word);
     if (localCache) {
-      console.log('✅ Found in local cache');
+      console.log('✅ Found in local SQLite cache');
       if (this.isWordAgeAppropriate(localCache)) {
         return localCache;
       } else {
@@ -215,10 +246,11 @@ export class DatabaseService {
       }
     }
 
-    console.log('💾 Not in local cache, checking database');
+    // 2. Supabase cached_words (online only)
+    console.log('💾 Not in SQLite, checking Supabase');
     let dbCache = await this.getCachedWordFromDB(word);
     if (dbCache) {
-      console.log('✅ Found in database cache');
+      console.log('✅ Found in Supabase cache');
       if (!this.isWordAgeAppropriate(dbCache)) {
         console.log('⚠️ Word not age-appropriate:', word);
         return null;
@@ -228,14 +260,15 @@ export class DatabaseService {
       return dbCache;
     }
 
-    console.log('🌐 Not in database, fetching from API');
+    // 3. Edge Function (online only)
+    console.log('🌐 Not in Supabase, fetching from Edge Function');
     const apiData = await this.fetchFromDictionaryAPI(word);
     if (!apiData || apiData.length === 0) {
       console.log('❌ Word not found from API');
       return null;
     }
 
-    console.log('💾 Word found from API, caching to database...');
+    console.log('💾 Word found from API, caching...');
     const firstEntry = apiData[0];
     dbCache = await this.cacheWordInDB(firstEntry);
 
@@ -244,7 +277,6 @@ export class DatabaseService {
         console.log('⚠️ Word cached but not age-appropriate:', word);
         return null;
       }
-      await offlineStorageService.cacheWord(dbCache);
       console.log('✅ Word cached successfully, returning data');
       return dbCache;
     }
@@ -264,6 +296,11 @@ export class DatabaseService {
   }
 
   async getPopularWords(limit: number = 20): Promise<CachedWord[]> {
+    // SQLite first (works offline)
+    const local = await sqliteService.getPopularWords(limit, this.currentProfileAge);
+    if (local.length > 0) return local;
+
+    // Supabase fallback (online only)
     const { data, error } = await supabase
       .from('cached_words')
       .select('*')
@@ -281,6 +318,15 @@ export class DatabaseService {
   }
 
   async getRecentWords(limit: number = 20): Promise<CachedWord[]> {
+    // SQLite first (works offline, using search_count as proxy for "recently added")
+    const local = await sqliteService.getAllCachedWords();
+    if (local.length > 0) {
+      return local
+        .filter(w => w.is_age_appropriate !== false && (!w.min_age || w.min_age <= this.currentProfileAge))
+        .slice(0, limit);
+    }
+
+    // Supabase fallback (online only)
     const { data, error } = await supabase
       .from('cached_words')
       .select('*')

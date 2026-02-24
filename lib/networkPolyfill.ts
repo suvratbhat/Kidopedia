@@ -79,26 +79,42 @@ if (Platform.OS === 'android') {
       return response;
     } catch (error: any) {
       const message: string = error?.message ?? '';
+      const name: string = error?.name ?? '';
+      // Capture every available diagnostic field before rethrowing.
+      const code: string | undefined = error?.code;
+      const cause: string | undefined = error?.cause?.message ?? error?.cause?.toString();
 
       console.error('[NetworkPolyfill] Android fetch error:', {
         message,
-        name: error?.name,
+        name,
+        code,
+        cause,
         url: urlString,
       });
-
-      if (
-        message === 'Network request failed' ||
-        message === 'Failed to fetch'
-      ) {
-        throw new Error(
-          'Network connection failed. Please check your internet connection and try again.',
-        );
-      }
 
       if (error?.name === 'AbortError' && ownController?.signal.aborted) {
         throw new Error(
           `Request timed out after ${ANDROID_FETCH_TIMEOUT_MS / 1000}s. ` +
             'Please check your connection and try again.',
+        );
+      }
+
+      // Re-throw with all diagnostic info preserved so the connection test
+      // screen can surface the real OkHttp error (e.g. SSL handshake failure,
+      // certificate error, connection refused) instead of just a generic label.
+      if (
+        message === 'Network request failed' ||
+        message === 'Failed to fetch'
+      ) {
+        const detail = [
+          code ? `code=${code}` : null,
+          cause ? `cause="${cause}"` : null,
+        ]
+          .filter(Boolean)
+          .join(', ');
+        throw new Error(
+          `Network connection failed${detail ? ` (${detail})` : ''}. ` +
+            'Check internet connection or see console logs for the full error.',
         );
       }
 
