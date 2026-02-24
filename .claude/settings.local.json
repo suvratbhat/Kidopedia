@@ -8,7 +8,8 @@
       "Bash(npx --no-install tsc:*)",
       "Bash(/d/Kidopedia/node_modules/.bin/tsc:*)",
       "Bash(node /d/Kidopedia/node_modules/typescript/bin/tsc:*)",
-      "Bash(xargs basename:*)"
+      "Bash(xargs basename:*)",
+      "Bash(node -e \"const p = require\\(''./plugins/withAndroidNetworkFix''\\); console.log\\(''Plugin OK, type:'', typeof p\\)\")"
     ]
   }
 }

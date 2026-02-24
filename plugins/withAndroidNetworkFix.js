@@ -171,11 +171,93 @@ function withOkHttpProguardRules(config) {
   ]);
 }
 
+// ── 4. Force HTTP/1.1 in OkHttp via MainApplication.kt patch ─────────────────
+//
+// OkHttp negotiates HTTP/2 via ALPN during TLS handshake. In some React
+// Native production builds the HTTP/2 SETTINGS frame exchange is rejected
+// by Cloudflare (which backs Supabase), causing "Network request failed"
+// at the TCP level.  Forcing HTTP/1.1 avoids the negotiation entirely.
+// (httpbin.org works in the failing build because it doesn't share Cloudflare's
+// strict HTTP/2 enforcement — this is the classic symptom.)
+
+const HTTP1_FACTORY_KOTLIN = `
+    // ── Force HTTP/1.1 (plugins/withAndroidNetworkFix.js) ───────────────
+    // OkHttp's HTTP/2 SETTINGS frame is rejected by Cloudflare in some RN
+    // production builds, causing all Supabase fetches to fail at the TCP
+    // level even though generic HTTPS works fine. HTTP/1.1 avoids this.
+    com.facebook.react.modules.network.OkHttpClientProvider.setOkHttpClientFactory(
+      object : com.facebook.react.modules.network.OkHttpClientFactory {
+        override fun createNewNetworkModuleClient(): okhttp3.OkHttpClient =
+          com.facebook.react.modules.network.OkHttpClientProvider
+            .createClientBuilder()
+            .protocols(listOf(okhttp3.Protocol.HTTP_1_1))
+            .build()
+      }
+    )
+    // ────────────────────────────────────────────────────────────────────`;
+
+function withForceHttp1(config) {
+  return withDangerousMod(config, [
+    'android',
+    async (config) => {
+      const { platformProjectRoot } = config.modRequest;
+
+      // Derive the java source path from the android package name.
+      const pkg = (config.android && config.android.package) || 'com.kidopedia.app';
+      const pkgPath = pkg.replace(/\./g, path.sep);
+      const mainAppFile = path.join(
+        platformProjectRoot,
+        'app', 'src', 'main', 'java', pkgPath, 'MainApplication.kt',
+      );
+
+      if (!fs.existsSync(mainAppFile)) {
+        console.warn(
+          '[withAndroidNetworkFix] MainApplication.kt not found at ' +
+            mainAppFile + '. Skipping HTTP/1.1 patch.',
+        );
+        return config;
+      }
+
+      let content = fs.readFileSync(mainAppFile, 'utf8');
+
+      // Already patched — idempotent.
+      if (content.includes('Force HTTP/1.1 (plugins/withAndroidNetworkFix')) {
+        return config;
+      }
+
+      // Insert the factory call right after `super.onCreate()`.  This is the
+      // first statement inside MainApplication.onCreate() in every Expo-
+      // generated template, so the replacement is unambiguous.
+      const INSERTION_POINT = 'super.onCreate()';
+      if (!content.includes(INSERTION_POINT)) {
+        console.warn(
+          '[withAndroidNetworkFix] Could not find "super.onCreate()" in ' +
+            mainAppFile + '. Skipping HTTP/1.1 patch.',
+        );
+        return config;
+      }
+
+      content = content.replace(
+        INSERTION_POINT,
+        INSERTION_POINT + HTTP1_FACTORY_KOTLIN,
+      );
+
+      fs.writeFileSync(mainAppFile, content, 'utf8');
+      console.log(
+        '[withAndroidNetworkFix] Patched MainApplication.kt to force HTTP/1.1',
+      );
+
+      return config;
+    },
+  ]);
+}
+
 // ── Compose ───────────────────────────────────────────────────────────────────
 
 module.exports = function withAndroidNetworkFix(config) {
   config = withNetworkSecurityConfig(config);
   config = withNetworkSecurityManifest(config);
   config = withOkHttpProguardRules(config);
+  config = withForceHttp1(config);
   return config;
 };
