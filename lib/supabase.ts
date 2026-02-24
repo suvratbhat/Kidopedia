@@ -1,15 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import 'react-native-url-polyfill/auto';
 import { Platform } from 'react-native';
-
-// Add XMLHttpRequest polyfill for Android
-if (Platform.OS === 'android' && typeof global.XMLHttpRequest === 'undefined') {
-  global.XMLHttpRequest = class XMLHttpRequest {
-    constructor() {
-      return fetch as any;
-    }
-  } as any;
-}
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -29,12 +21,17 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    persistSession: true,
+    storage: AsyncStorage,
     autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: false,
   },
   global: {
     headers: {
       'X-Client-Info': 'kidopedia-app',
     },
+    // Explicitly pass the (polyfilled) global fetch so the Supabase client
+    // always uses the Android-compatible version installed by networkPolyfill.ts
+    fetch: fetch,
   },
 });

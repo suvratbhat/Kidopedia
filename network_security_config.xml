@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android Network Security Configuration for Kidopedia.
+  Allows HTTPS traffic to Supabase and related domains.
+  Trusts the system certificate store (no certificate pinning),
+  which lets OkHttp (React Native's HTTP client) validate Supabase's TLS certs
+  the same way Chrome/WebView does.
+-->
+<network-security-config>
+    <!-- Explicitly trust system CAs for Supabase domains -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">supabase.co</domain>
+        <domain includeSubdomains="true">supabase.io</domain>
+        <trust-anchors>
+            <certificates src="system"/>
+        </trust-anchors>
+    </domain-config>
+
+    <!-- Also trust system CAs for the Free Dictionary API used by edge functions -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">api.dictionaryapi.dev</domain>
+        <trust-anchors>
+            <certificates src="system"/>
+        </trust-anchors>
+    </domain-config>
+
+    <!-- Base config: HTTPS only everywhere, trust system CAs -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system"/>
+        </trust-anchors>
+    </base-config>
+</network-security-config>
