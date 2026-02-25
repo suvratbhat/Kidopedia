@@ -13,7 +13,8 @@
       "WebFetch(domain:knvrcozeveutvwallrgf.supabase.co)",
       "Bash(git rm --cached .env)",
       "Bash(git add .github/workflows/build-apk.yml .gitignore)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(node -e:*)"
     ]
   }
 }

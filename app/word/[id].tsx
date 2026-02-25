@@ -49,7 +49,7 @@ export default function WordDetailScreen() {
 
     try {
       setIsSpeaking(true);
-      await pronunciationService.speakEnglish(word.word);
+      await pronunciationService.speak(word.word, 'en-US');
     } catch (error) {
       console.error('Pronunciation error:', error);
     } finally {

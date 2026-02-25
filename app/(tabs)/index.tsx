@@ -291,8 +291,7 @@ export default function SearchScreen() {
           renderItem={({ item }) => (
             <WordCard
               word={item.word}
-              meaning={getFirstDefinition(item.meanings)}
-              difficulty="easy"
+              definition={getFirstDefinition(item.meanings)}
               onPress={() => handleWordPress(item)}
             />
           )}
