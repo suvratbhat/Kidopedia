@@ -1,0 +1,12 @@
+const w = require('../assets/data/seed-words.json');
+const withPhonetic = w.filter(x => x.phonetic && x.phonetic.trim());
+const withAudio = w.filter(x => x.audio_url && x.audio_url.trim());
+const withKannada = w.filter(x => x.kannada_translation && x.kannada_translation.trim());
+const withHindi = w.filter(x => x.hindi_translation && x.hindi_translation.trim());
+console.log(`Total: ${w.length}`);
+console.log(`Phonetic (IPA): ${withPhonetic.length} / ${w.length}`);
+console.log(`Audio URL:      ${withAudio.length} / ${w.length}`);
+console.log(`Kannada:        ${withKannada.length} / ${w.length}`);
+console.log(`Hindi:          ${withHindi.length} / ${w.length}`);
+console.log('\nSample missing phonetics:', w.filter(x => !x.phonetic).slice(0,10).map(x=>x.word).join(', '));
+console.log('Sample missing Kannada:', w.filter(x => !x.kannada_translation).slice(0,15).map(x=>x.word).join(', '));
