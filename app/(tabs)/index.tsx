@@ -103,7 +103,6 @@ export default function SearchScreen() {
       await profileService.trackWordView(activeProfile.id, word.word);
     }
     await offlineStorageService.addRecentSearch(word.word);
-    await offlineStorageService.addToSearchHistory(word.word);
     router.push(`/word/${encodeURIComponent(word.word)}`);
     await loadRecentSearches();
     await loadProfileData();
