@@ -16,6 +16,7 @@ class NetworkDebugService {
     results.push(await this.testEnvironmentVariables());
     results.push(await this.testDNSResolution());
     results.push(await this.testThirdPartyHTTPS());
+    results.push(await this.testSupabasePublicSite());   // NEW: isolates project URL vs Cloudflare
     results.push(await this.testHTTPSConnection());
     results.push(await this.testSupabaseEndpoint());
     results.push(await this.testWithDifferentHeaders());
@@ -26,12 +27,16 @@ class NetworkDebugService {
   private testEnvironmentVariables(): NetworkTestResult {
     const hasUrl = !!this.supabaseUrl;
     const hasKey = !!process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+    // Show enough of the URL to verify the project ref without exposing full anon key.
+    const urlPreview = hasUrl
+      ? this.supabaseUrl.replace('https://', '').substring(0, 36) + '…'
+      : 'MISSING';
 
     return {
       test: 'Environment Variables',
       success: hasUrl && hasKey,
       message: hasUrl && hasKey
-        ? 'All environment variables present'
+        ? `URL: ${urlPreview}`
         : 'Missing environment variables',
       details: {
         url: hasUrl ? this.supabaseUrl : 'MISSING',
@@ -109,6 +114,38 @@ class NetworkDebugService {
         success: false,
         message: `Failed: ${error.message}`,
         details: { error: error.message, name: error.name, code: (error as any).code },
+      };
+    }
+  }
+
+  // Tests supabase.com (the public website) — same Cloudflare IPs as all
+  // Supabase project URLs.  If this passes but the project URL fails, the
+  // issue is the specific project subdomain (wrong URL / deleted project).
+  // If this also fails, the device's carrier is blocking Cloudflare IPs.
+  private async testSupabasePublicSite(): Promise<NetworkTestResult> {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+      const response = await fetch('https://supabase.com', {
+        method: 'HEAD',
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      return {
+        test: 'Cloudflare / supabase.com',
+        success: true,
+        message: `Reachable — status ${response.status}. Cloudflare IPs work.`,
+        details: { status: response.status },
+      };
+    } catch (error: any) {
+      return {
+        test: 'Cloudflare / supabase.com',
+        success: false,
+        message: `Failed: ${error.message} — Cloudflare IPs may be blocked by carrier`,
+        details: { error: error.message },
       };
     }
   }
