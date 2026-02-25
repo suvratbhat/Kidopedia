@@ -43,8 +43,9 @@ jobs:
 
       - name: Create .env file
         run: |
-          echo "EXPO_PUBLIC_SUPABASE_URL=${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}" >> .env
-          echo "EXPO_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}" >> .env
+          printf "EXPO_PUBLIC_SUPABASE_URL=%s\nEXPO_PUBLIC_SUPABASE_ANON_KEY=%s\n" \
+            "${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}" \
+            "${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}" > .env
 
       - name: Verify environment
         run: |
@@ -53,6 +54,8 @@ jobs:
           echo "Java version: $(java -version 2>&1 | head -n 1)"
           echo "Checking .env file..."
           ls -la .env || echo ".env not found"
+          echo "Line count in .env: $(wc -l < .env)"
+          echo "URL line preview: $(grep EXPO_PUBLIC_SUPABASE_URL .env | cut -c1-60)..."
 
       - name: Prebuild Android
         run: |
