@@ -10,7 +10,10 @@
       "Bash(node /d/Kidopedia/node_modules/typescript/bin/tsc:*)",
       "Bash(xargs basename:*)",
       "Bash(node -e \"const p = require\\(''./plugins/withAndroidNetworkFix''\\); console.log\\(''Plugin OK, type:'', typeof p\\)\")",
-      "WebFetch(domain:knvrcozeveutvwallrgf.supabase.co)"
+      "WebFetch(domain:knvrcozeveutvwallrgf.supabase.co)",
+      "Bash(git rm --cached .env)",
+      "Bash(git add .github/workflows/build-apk.yml .gitignore)",
+      "Bash(git commit:*)"
     ]
   }
 }
