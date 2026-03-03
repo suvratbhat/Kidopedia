@@ -28,6 +28,9 @@ function generateId(): string {
 
 async function syncProfileToSupabase(profile: KidProfile): Promise<void> {
   try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const parentId = session?.user?.id;
+
     await supabase.rpc('upsert_kid_profile', {
       id_val: profile.id,
       name_val: profile.name,
@@ -38,6 +41,7 @@ async function syncProfileToSupabase(profile: KidProfile): Promise<void> {
       current_level_val: profile.current_level,
       total_xp_val: profile.total_xp,
       words_learned_val: profile.words_learned,
+      parent_id_val: profile.parent_id || parentId || null,
     });
     await sqliteService.updateProfile(profile.id, { supabase_synced: 1 } as any);
   } catch (error) {
@@ -62,8 +66,12 @@ export const localProfileService = {
   async createProfile(
     data: Omit<KidProfile, 'id' | 'created_at' | 'last_active_at' | 'current_level' | 'total_xp' | 'words_learned'>,
   ): Promise<KidProfile> {
+    const { data: { session } } = await supabase.auth.getSession();
+    const parentId = session?.user?.id;
+
     const profile: KidProfile = {
       id: generateId(),
+      parent_id: parentId,
       name: data.name,
       age: data.age,
       gender: data.gender,

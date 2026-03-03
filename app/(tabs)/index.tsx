@@ -7,6 +7,7 @@ import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { CategoryCard } from '../../components/CategoryCard';
 import { LevelBanner } from '../../components/LevelBanner';
 import { AchievementBadge } from '../../components/AchievementBadge';
+import ProfileSwitcher from '../../components/ProfileSwitcher';
 import { databaseService } from '../../services/databaseService';
 import { offlineStorageService } from '../../services/offlineStorageService';
 import { profileService } from '../../services/profileService';
@@ -183,14 +184,7 @@ export default function SearchScreen() {
           <Text style={styles.greeting}>Hi {activeProfile?.name}!</Text>
           <Text style={styles.subtitle}>Let's learn something awesome!</Text>
         </View>
-        <TouchableOpacity
-          style={[styles.profileButton, { backgroundColor: activeProfile?.avatar_color }]}
-          onPress={() => router.push('/profiles')}
-        >
-          <Text style={styles.profileInitial}>
-            {activeProfile?.name.charAt(0).toUpperCase()}
-          </Text>
-        </TouchableOpacity>
+        <ProfileSwitcher />
       </View>
 
       <SearchBar

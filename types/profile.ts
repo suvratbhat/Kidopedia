@@ -1,5 +1,6 @@
 export interface KidProfile {
   id: string;
+  parent_id?: string;
   name: string;
   age: number;
   gender: 'boy' | 'girl' | 'other';

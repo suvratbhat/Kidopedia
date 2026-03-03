@@ -45,6 +45,10 @@ export default function ProfilesScreen() {
   };
 
   const handleCreateProfile = async () => {
+    if (profiles.length >= 4) {
+      Alert.alert('Limit Reached', 'You can have up to 4 profiles per account.');
+      return;
+    }
     if (!name.trim()) {
       Alert.alert('Error', 'Please enter a name');
       return;
@@ -315,9 +319,11 @@ export default function ProfilesScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Kid Profiles</Text>
-        <TouchableOpacity style={styles.addButton} onPress={openCreateModal}>
-          <Plus size={24} color="#FFFFFF" />
-        </TouchableOpacity>
+        {profiles.length < 4 && (
+          <TouchableOpacity style={styles.addButton} onPress={openCreateModal}>
+            <Plus size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+        )}
       </View>
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.profileList}>

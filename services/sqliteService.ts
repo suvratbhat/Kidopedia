@@ -67,6 +67,7 @@ function rowToCachedWord(row: Record<string, unknown>): CachedWord {
 function rowToProfile(row: Record<string, unknown>): KidProfile {
   return {
     id: row.id as string,
+    parent_id: row.parent_id as string | undefined,
     name: row.name as string,
     age: row.age as number,
     gender: row.gender as 'boy' | 'girl' | 'other',
@@ -122,6 +123,7 @@ END;
 
 CREATE TABLE IF NOT EXISTS profiles (
   id              TEXT PRIMARY KEY,
+  parent_id       TEXT,
   name            TEXT NOT NULL,
   age             INTEGER NOT NULL,
   gender          TEXT NOT NULL,
@@ -198,16 +200,28 @@ CREATE TABLE IF NOT EXISTS sync_metadata (
  * SQLite does not support "ADD COLUMN IF NOT EXISTS", so we check PRAGMA first.
  */
 async function _runMigrations(database: SQLite.SQLiteDatabase): Promise<void> {
-  const cols = await database.getAllAsync<{ name: string }>(
+  // Profiles table migrations
+  const profileCols = await database.getAllAsync<{ name: string }>(
+    `PRAGMA table_info(profiles)`,
+  );
+  const profileColNames = new Set(profileCols.map((c) => c.name));
+  if (!profileColNames.has('parent_id')) {
+    await database.execAsync(
+      `ALTER TABLE profiles ADD COLUMN parent_id TEXT;`,
+    );
+  }
+
+  // Word progress table migrations
+  const wpCols = await database.getAllAsync<{ name: string }>(
     `PRAGMA table_info(word_progress)`,
   );
-  const colNames = new Set(cols.map((c) => c.name));
-  if (!colNames.has('attempt_count')) {
+  const wpColNames = new Set(wpCols.map((c) => c.name));
+  if (!wpColNames.has('attempt_count')) {
     await database.execAsync(
       `ALTER TABLE word_progress ADD COLUMN attempt_count INTEGER NOT NULL DEFAULT 0;`,
     );
   }
-  if (!colNames.has('correct_count')) {
+  if (!wpColNames.has('correct_count')) {
     await database.execAsync(
       `ALTER TABLE word_progress ADD COLUMN correct_count INTEGER NOT NULL DEFAULT 0;`,
     );
@@ -224,9 +238,9 @@ export const sqliteService = {
     db = await SQLite.openDatabaseAsync('kidopedia.db');
     await db.execAsync(DDL);
     await this.seedAchievements(BUILT_IN_ACHIEVEMENTS);
-    // Migrate existing databases: add mastery columns if they don't exist yet
+    // Migrate existing databases
     await _runMigrations(db);
-    await this.setSyncMeta('db_schema_version', '2');
+    await this.setSyncMeta('db_schema_version', '3');
     console.log('[SQLite] Database initialized');
   },
 
@@ -360,12 +374,13 @@ export const sqliteService = {
   async insertProfile(profile: KidProfile & { supabase_synced?: number }): Promise<void> {
     await getDb().runAsync(
       `INSERT INTO profiles
-         (id, name, age, gender, avatar_color, avatar_url,
+         (id, parent_id, name, age, gender, avatar_color, avatar_url,
           current_level, total_xp, words_learned,
           created_at, last_active_at, supabase_synced)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         profile.id,
+        profile.parent_id ?? null,
         profile.name,
         profile.age,
         profile.gender,
@@ -385,6 +400,7 @@ export const sqliteService = {
     const fields: string[] = [];
     const values: unknown[] = [];
 
+    if (updates.parent_id !== undefined)      { fields.push('parent_id = ?');       values.push(updates.parent_id); }
     if (updates.name !== undefined)           { fields.push('name = ?');            values.push(updates.name); }
     if (updates.age !== undefined)            { fields.push('age = ?');             values.push(updates.age); }
     if (updates.gender !== undefined)         { fields.push('gender = ?');          values.push(updates.gender); }
