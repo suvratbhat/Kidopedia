@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ScrollView, Modal } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SearchBar } from '../../components/SearchBar';
 import { WordCard } from '../../components/WordCard';
@@ -7,14 +7,17 @@ import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { CategoryCard } from '../../components/CategoryCard';
 import { LevelBanner } from '../../components/LevelBanner';
 import { AchievementBadge } from '../../components/AchievementBadge';
+import { KidButton } from '../../components/KidButton';
 import ProfileSwitcher from '../../components/ProfileSwitcher';
 import { databaseService } from '../../services/databaseService';
 import { offlineStorageService } from '../../services/offlineStorageService';
 import { profileService } from '../../services/profileService';
 import { contentFilterService } from '../../services/contentFilterService';
+import { badgesService, Badge } from '../../services/badgesService';
 import { useProfile } from '@/contexts/ProfileContext';
 import { CachedWord } from '../../types/dictionary';
 import { Sparkles, Rocket, Heart, Apple, Zap, Gamepad2, User, AlertCircle } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 
 export default function SearchScreen() {
   const router = useRouter();
@@ -26,10 +29,17 @@ export default function SearchScreen() {
   const [favoriteCount, setFavoriteCount] = useState(0);
   const [streakData, setStreakData] = useState({ current: 0, longest: 0 });
   const [showContentBlockedMessage, setShowContentBlockedMessage] = useState(false);
+  
+  // Badge Celebration State
+  const [newBadges, setNewBadges] = useState<Badge[]>([]);
+  const [showCelebration, setShowCelebration] = useState(false);
 
   useEffect(() => {
     loadRecentSearches();
     loadProfileData();
+    if (activeProfile) {
+      checkNewBadges();
+    }
   }, [activeProfile]);
 
   useEffect(() => {
@@ -56,6 +66,19 @@ export default function SearchScreen() {
       }
     } catch (error) {
       console.error('Error loading profile data:', error);
+    }
+  };
+
+  const checkNewBadges = async () => {
+    if (!activeProfile) return;
+    try {
+      const { newlyUnlocked } = await badgesService.evaluateBadges(activeProfile.id);
+      if (newlyUnlocked && newlyUnlocked.length > 0) {
+        setNewBadges(newlyUnlocked);
+        setShowCelebration(true);
+      }
+    } catch (error) {
+      console.error('Error evaluating badges:', error);
     }
   };
 
@@ -321,6 +344,42 @@ export default function SearchScreen() {
           contentContainerStyle={searchResults.length === 0 ? styles.emptyList : undefined}
         />
       )}
+
+      {/* Celebration Modal */}
+      <Modal
+        visible={showCelebration}
+        transparent={true}
+        animationType="fade"
+      >
+        <View style={styles.modalOverlay}>
+          <LinearGradient
+            colors={[theme.primary, theme.accent]}
+            style={styles.modalContent}
+          >
+            <Sparkles size={64} color="#FFFFFF" style={styles.sparkleIcon} />
+            <Text style={styles.congratsText}>Congratulations!</Text>
+            <Text style={styles.unlockedText}>You unlocked new badges:</Text>
+            
+            <View style={styles.badgesContainer}>
+              {newBadges.map(badge => (
+                <View key={badge.id} style={styles.badgeItem}>
+                  <View style={styles.badgeIconBg}>
+                    <Text style={styles.badgeEmoji}>{badge.icon}</Text>
+                  </View>
+                  <Text style={styles.badgeTitle}>{badge.title}</Text>
+                </View>
+              ))}
+            </View>
+
+            <KidButton
+              title="Awesome!"
+              onPress={() => setShowCelebration(false)}
+              variant="secondary"
+              size="large"
+            />
+          </LinearGradient>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -446,5 +505,73 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    width: '100%',
+    maxWidth: 340,
+    borderRadius: 32,
+    padding: 32,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.4,
+    shadowRadius: 15,
+    elevation: 20,
+  },
+  sparkleIcon: {
+    marginBottom: 16,
+  },
+  congratsText: {
+    fontSize: 28,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  unlockedText: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    opacity: 0.9,
+    marginBottom: 24,
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  badgesContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 16,
+    marginBottom: 32,
+  },
+  badgeItem: {
+    alignItems: 'center',
+    width: 90,
+  },
+  badgeIconBg: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+    borderWidth: 3,
+    borderColor: 'rgba(255, 255, 255, 0.4)',
+  },
+  badgeEmoji: {
+    fontSize: 36,
+  },
+  badgeTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    textAlign: 'center',
   },
 });
