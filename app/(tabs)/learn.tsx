@@ -1,18 +1,40 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { KidButton } from '../../components/KidButton';
 import { ProgressBar } from '../../components/ProgressBar';
 import { offlineStorageService } from '../../services/offlineStorageService';
 import { databaseService } from '../../services/databaseService';
-import { Sparkles, Zap, Target, BookOpen, Brain, Gamepad2, Trophy } from 'lucide-react-native';
+import { customWordsService, CustomWord } from '../services/customWordsService';
+import { useProfile } from '../../contexts/ProfileContext';
+import { Sparkles, Zap, Target, BookOpen, Brain, Gamepad2, Trophy, School } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 export default function LearnScreen() {
   const router = useRouter();
+  const { activeProfile } = useProfile();
+  const [customWordsCount, setCustomWordsCount] = useState(0);
+
+  useEffect(() => {
+    if (activeProfile) {
+      customWordsService.getCustomWords(activeProfile.id).then(words => {
+        setCustomWordsCount(words.length);
+      });
+    }
+  }, [activeProfile]);
 
   const handleRandomWord = async () => {
     try {
+      // 30% chance to show a custom word if any exist
+      if (activeProfile && customWordsCount > 0 && Math.random() < 0.3) {
+        const customWords = await customWordsService.getCustomWords(activeProfile.id);
+        if (customWords.length > 0) {
+          const randomIndex = Math.floor(Math.random() * customWords.length);
+          router.push(`/word/${encodeURIComponent(customWords[randomIndex].word)}`);
+          return;
+        }
+      }
+
       const word = await offlineStorageService.getRandomCachedWord();
       if (word) {
         router.push(`/word/${encodeURIComponent(word.word)}`);
@@ -28,6 +50,17 @@ export default function LearnScreen() {
     }
   };
 
+  const handleSchoolPrep = async () => {
+    if (!activeProfile) return;
+    const customWords = await customWordsService.getCustomWords(activeProfile.id);
+    if (customWords.length > 0) {
+      const randomIndex = Math.floor(Math.random() * customWords.length);
+      router.push(`/word/${encodeURIComponent(customWords[randomIndex].word)}`);
+    } else {
+      router.push('/settings');
+    }
+  };
+
   const learningPaths = [
     {
       id: '1',
@@ -36,34 +69,38 @@ export default function LearnScreen() {
       gradient: ['#FF6F61', '#FFA726'],
       description: 'Learn 5 new words today!',
       progress: 3,
-      total: 5
+      total: 5,
+      onPress: handleRandomWord
+    },
+    {
+      id: '0',
+      title: 'School Prep',
+      icon: School,
+      gradient: ['#42A5F5', '#1E88E5'],
+      description: customWordsCount > 0 ? `Learn ${customWordsCount} words from school` : 'Add words from school in Settings!',
+      progress: 0,
+      total: customWordsCount || 1,
+      onPress: handleSchoolPrep
     },
     {
       id: '2',
       title: 'Story Mode',
       icon: BookOpen,
-      gradient: ['#42A5F5', '#1E88E5'],
+      gradient: ['#66BB6A', '#43A047'],
       description: 'Learn words through stories',
       progress: 12,
-      total: 20
+      total: 20,
+      onPress: handleRandomWord
     },
     {
       id: '3',
       title: 'Brain Trainer',
       icon: Brain,
-      gradient: ['#66BB6A', '#43A047'],
+      gradient: ['#FFD54F', '#FFA726'],
       description: 'Practice with fun games',
       progress: 8,
-      total: 10
-    },
-    {
-      id: '4',
-      title: 'Challenge Arena',
-      icon: Gamepad2,
-      gradient: ['#AB47BC', '#8E24AA'],
-      description: 'Test your knowledge!',
-      progress: 0,
-      total: 5
+      total: 10,
+      onPress: handleRandomWord
     },
   ];
 
@@ -107,7 +144,7 @@ export default function LearnScreen() {
             <TouchableOpacity
               key={path.id}
               style={styles.pathCard}
-              onPress={handleRandomWord}
+              onPress={path.onPress}
               activeOpacity={0.8}
             >
               <LinearGradient

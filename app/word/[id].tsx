@@ -8,6 +8,7 @@ import { databaseService } from '../../services/databaseService';
 import { profileService } from '@/services/profileService';
 import { PronounceButton } from '../../components/PronounceButton';
 import { contentFilterService } from '../../services/contentFilterService';
+import { customWordsService } from '../services/customWordsService';
 import { masteryService, MasteryTier } from '@/services/masteryService';
 import { useProfile } from '@/contexts/ProfileContext';
 import { CachedWord } from '../../types/dictionary';
@@ -30,6 +31,21 @@ export default function WordDetailScreen() {
       if (!id) return;
 
       const decodedWord = decodeURIComponent(id);
+      
+      // Check custom words first if profile is active
+      if (activeProfile) {
+        const customWord = await customWordsService.getCustomWordByText(activeProfile.id, decodedWord);
+        if (customWord) {
+          setWord(customWordsService.mapToCachedWord(customWord));
+          await profileService.trackWordView(activeProfile.id, customWord.word);
+          const progress = await profileService.getWordProgress(activeProfile.id);
+          const wordProgress = progress.find(p => p.word === customWord.word);
+          setIsFavorite(wordProgress?.is_favorite || false);
+          setIsLoading(false);
+          return;
+        }
+      }
+
       const wordData = await databaseService.getWordDetails(decodedWord);
       setWord(wordData);
 

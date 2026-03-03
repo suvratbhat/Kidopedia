@@ -9,12 +9,14 @@ import { pronunciationService } from '../../services/pronunciationService';
 import { connectionTestService } from '../../services/connectionTestService';
 import { avatarService } from '../../services/avatarService';
 import { notificationService } from '../../services/notificationService';
+import { customWordsService, CustomWord } from '../services/customWordsService';
+import { AddWordForm } from '../components/AddWordForm';
 import { useProfile } from '../../contexts/ProfileContext';
 import { KidProfile } from '../../types/profile';
 import { SyncStatus } from '../../types/sync';
 import {
   Volume2, Calendar, Info, BookOpen, Download, Trash2,
-  Activity, RefreshCw, XCircle, Users, Plus, User, Shuffle, Check, Bell
+  Activity, RefreshCw, XCircle, Users, Plus, User, Shuffle, Check, Bell, BookPlus
 } from 'lucide-react-native';
 
 export default function SettingsScreen() {
@@ -43,11 +45,18 @@ export default function SettingsScreen() {
   const [downloadProgress, setDownloadProgress] = useState<DownloadProgress | null>(null);
   const [storageSize, setStorageSize] = useState('0 B');
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
+  const [customWords, setCustomWords] = useState<CustomWord[]>([]);
 
   useEffect(() => {
     loadSettings();
     offlineDownloadService.setProgressCallback(handleProgressUpdate);
   }, []);
+
+  useEffect(() => {
+    if (activeProfile) {
+      customWordsService.getCustomWords(activeProfile.id).then(setCustomWords);
+    }
+  }, [activeProfile]);
 
   useEffect(() => {
     if (showProfileModal) {
@@ -159,6 +168,34 @@ export default function SettingsScreen() {
         },
       ]
     );
+  };
+
+  const handleDeleteCustomWord = async (wordId: string) => {
+    Alert.alert(
+      'Delete Word',
+      'Are you sure you want to remove this word from your list?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            const success = await customWordsService.deleteCustomWord(wordId);
+            if (success && activeProfile) {
+              const cw = await customWordsService.getCustomWords(activeProfile.id);
+              setCustomWords(cw);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleWordAdded = async () => {
+    if (activeProfile) {
+      const cw = await customWordsService.getCustomWords(activeProfile.id);
+      setCustomWords(cw);
+    }
   };
 
   useEffect(() => {
@@ -424,6 +461,43 @@ export default function SettingsScreen() {
           )}
           <Text style={styles.limitHint}>Manage up to 4 profiles per account</Text>
         </View>
+
+        {/* ── Custom Vocabulary ───────────────────────────────────────────── */}
+        {activeProfile && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <BookPlus size={24} color="#42A5F5" />
+              <Text style={styles.sectionTitle}>Custom Vocabulary</Text>
+            </View>
+
+            <AddWordForm 
+              profileId={activeProfile.id} 
+              onWordAdded={handleWordAdded} 
+            />
+
+            {customWords.length > 0 && (
+              <View style={styles.customWordsList}>
+                <Text style={styles.subSectionTitle}>Your Added Words ({customWords.length})</Text>
+                {customWords.map((word) => (
+                  <View key={word.id} style={styles.customWordItem}>
+                    <View style={styles.customWordInfo}>
+                      <Text style={styles.customWordText}>{word.word}</Text>
+                      <Text style={styles.customWordDef} numberOfLines={1}>
+                        {word.definition}
+                      </Text>
+                    </View>
+                    <TouchableOpacity 
+                      onPress={() => handleDeleteCustomWord(word.id)}
+                      style={styles.deleteWordButton}
+                    >
+                      <Trash2 size={18} color="#EF4444" />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+        )}
 
         {/* ── Dictionary Sync ──────────────────────────────────────────────── */}
         <View style={styles.section}>
@@ -918,6 +992,46 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     textAlign: 'center',
     marginTop: 12,
+  },
+  customWordsList: {
+    marginTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    paddingTop: 16,
+  },
+  subSectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#475569',
+    marginBottom: 12,
+  },
+  customWordItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  customWordInfo: {
+    flex: 1,
+  },
+  customWordText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1E293B',
+    textTransform: 'capitalize',
+  },
+  customWordDef: {
+    fontSize: 13,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  deleteWordButton: {
+    padding: 8,
+    marginLeft: 8,
   },
   syncRow: {
     flexDirection: 'row',
