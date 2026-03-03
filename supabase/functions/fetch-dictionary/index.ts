@@ -161,23 +161,28 @@ Deno.serve(async (req: Request) => {
 
     console.log(`📊 Translation results - Kannada: "${kannadaTranslation}", Hindi: "${hindiTranslation}"`);
 
-    const processedData = data.map(entry => ({
-      word: entry.word,
-      phonetic: entry.phonetic || entry.phonetics.find(p => p.text)?.text || "",
-      audioUrl: entry.phonetics.find(p => p.audio)?.audio || "",
-      meanings: entry.meanings.map(meaning => ({
-        partOfSpeech: meaning.partOfSpeech,
-        definitions: meaning.definitions.map(def => ({
-          definition: def.definition,
-          example: def.example || "",
-          synonyms: def.synonyms || [],
-          antonyms: def.antonyms || [],
+    const processedData = data.map(entry => {
+      const audio = entry.phonetics.find(p => p.audio)?.audio || "";
+      const fallbackAudio = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(entry.word)}&tl=en&client=tw-ob`;
+      
+      return {
+        word: entry.word,
+        phonetic: entry.phonetic || entry.phonetics.find(p => p.text)?.text || "",
+        audioUrl: audio || fallbackAudio,
+        meanings: entry.meanings.map(meaning => ({
+          partOfSpeech: meaning.partOfSpeech,
+          definitions: meaning.definitions.map(def => ({
+            definition: def.definition,
+            example: def.example || "",
+            synonyms: def.synonyms || [],
+            antonyms: def.antonyms || [],
+          })),
         })),
-      })),
-      origin: entry.origin || "",
-      kannadaTranslation,
-      hindiTranslation,
-    }));
+        origin: entry.origin || "",
+        kannadaTranslation,
+        hindiTranslation,
+      };
+    });
 
     return new Response(
       JSON.stringify(processedData),

@@ -287,21 +287,23 @@ export const challengeService = {
     return updated;
   },
 
-  /** Background Supabase sync of challenge progress. */
-  async _syncChallengeToSupabase(challenge: DailyChallenge): Promise<void> {
-    try {
-      await supabase.from('daily_challenges').upsert({
-        profile_id: challenge.profileId,
-        challenge_date: challenge.date,
-        word_ids: challenge.words.map((w) => w.word),
-        answers_given: challenge.answersGiven,
-        completed: challenge.completed,
-        badge_unlocked: challenge.badgeUnlocked,
-      });
-    } catch {
-      // Silently ignore network errors
+    /** Background Supabase sync of challenge progress. */
+    async _syncChallengeToSupabase(challenge: DailyChallenge): Promise<void> {
+      try {
+        await supabase.rpc('upsert_daily_challenge', {
+          profile_id_val: challenge.profileId,
+          challenge_date_val: challenge.date,
+          word_ids_val: challenge.words.map((w) => w.word),
+          answers_given_val: challenge.answersGiven,
+          completed_val: challenge.completed,
+          badge_unlocked_val: challenge.badgeUnlocked,
+        });
+      } catch (error) {
+        console.error('Error syncing challenge to Supabase:', error);
+        // Silently ignore network errors
+      }
     }
-  },
+  ,
 
   /**
    * Check if today's challenge is already complete for a profile.

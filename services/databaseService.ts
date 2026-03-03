@@ -130,26 +130,19 @@ export class DatabaseService {
     await sqliteService.upsertWord(cachedWord).catch(() => {});
 
     // Also write to Supabase if online
-    const { data, error } = await supabase
-      .from('cached_words')
-      .upsert({
-        word: cachedWord.word,
-        phonetic: cachedWord.phonetic,
-        audio_url: cachedWord.audio_url,
-        meanings: filteredMeanings,
-        origin: cachedWord.origin,
-        kannada_translation: cachedWord.kannada_translation,
-        hindi_translation: cachedWord.hindi_translation,
-        is_age_appropriate: isAppropriate,
-        min_age: minAge,
-        content_flags: contentFlags,
-        complexity_level: complexityLevel,
-        updated_at: new Date().toISOString(),
-      }, {
-        onConflict: 'word',
-      })
-      .select()
-      .maybeSingle();
+    const { data, error } = await supabase.rpc('upsert_cached_word', {
+      word_val: cachedWord.word,
+      phonetic_val: cachedWord.phonetic,
+      audio_url_val: cachedWord.audio_url,
+      meanings_val: filteredMeanings,
+      origin_val: cachedWord.origin,
+      kannada_val: cachedWord.kannada_translation,
+      hindi_val: cachedWord.hindi_translation,
+      is_age_appropriate_val: isAppropriate,
+      min_age_val: minAge,
+      content_flags_val: contentFlags,
+      complexity_level_val: complexityLevel,
+    });
 
     if (error) {
       console.error('❌ Error caching word in Supabase:', error);

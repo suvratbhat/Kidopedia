@@ -141,17 +141,15 @@ async function _syncAttemptToSupabase(
     const progress = await sqliteService.getSingleWordProgress(profileId, word);
     if (!progress) return;
 
-    await supabase.from('word_progress').upsert(
-      {
-        profile_id: profileId,
-        word,
-        attempt_count: (progress as any).attempt_count ?? 0,
-        correct_count: (progress as any).correct_count ?? 0,
-        last_seen_at: progress.last_viewed_at,
-      },
-      { onConflict: 'profile_id,word' },
-    );
-  } catch {
+    await supabase.rpc('upsert_word_progress', {
+      profile_id_val: profileId,
+      word_val: word,
+      attempt_count_val: (progress as any).attempt_count ?? 0,
+      correct_count_val: (progress as any).correct_count ?? 0,
+      last_seen_at_val: progress.last_viewed_at,
+    });
+  } catch (error) {
+    console.error('Error syncing attempt to Supabase:', error);
     // Silently ignore — SQLite is source of truth
   }
 }
