@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Tabs, useRouter } from 'expo-router';
-import { Home, Heart, Rocket, Settings } from 'lucide-react-native';
+import { Home, Heart, Rocket, Settings, Flame } from 'lucide-react-native';
 import { useProfile } from '@/contexts/ProfileContext';
 import { ActivityIndicator, View } from 'react-native';
 
@@ -68,6 +68,13 @@ export default function TabLayout() {
         options={{
           title: 'Learn',
           tabBarIcon: ({ size, color }) => <Rocket size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="challenge"
+        options={{
+          title: 'Challenge',
+          tabBarIcon: ({ size, color }) => <Flame size={size} color={color} />,
         }}
       />
       <Tabs.Screen

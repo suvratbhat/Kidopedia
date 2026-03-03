@@ -12,3 +12,7 @@ expo-env.d.ts
 
 # Local dev tool config
 .claude/
+.trippie/
+node_modules
+.next
+dist
