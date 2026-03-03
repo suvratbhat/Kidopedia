@@ -28,19 +28,24 @@ function generateId(): string {
 
 async function syncProfileToSupabase(profile: KidProfile): Promise<void> {
   try {
-    await supabase.from('kid_profiles').upsert({
-      id: profile.id,
-      name: profile.name,
-      age: profile.age,
-      gender: profile.gender,
-      avatar_color: profile.avatar_color,
-      avatar_url: profile.avatar_url ?? null,
-      current_level: profile.current_level,
-      total_xp: profile.total_xp,
-      words_learned: profile.words_learned,
+    const { data: { session } } = await supabase.auth.getSession();
+    const parentId = session?.user?.id;
+
+    await supabase.rpc('upsert_kid_profile', {
+      id_val: profile.id,
+      name_val: profile.name,
+      age_val: profile.age,
+      gender_val: profile.gender,
+      avatar_color_val: profile.avatar_color,
+      avatar_url_val: profile.avatar_url ?? null,
+      current_level_val: profile.current_level,
+      total_xp_val: profile.total_xp,
+      words_learned_val: profile.words_learned,
+      parent_id_val: profile.parent_id || parentId || null,
     });
     await sqliteService.updateProfile(profile.id, { supabase_synced: 1 } as any);
-  } catch {
+  } catch (error) {
+    console.error('Error syncing profile to Supabase:', error);
     // Silently ignore — will retry via pushUnsyncedProfiles on next launch
   }
 }
@@ -61,8 +66,12 @@ export const localProfileService = {
   async createProfile(
     data: Omit<KidProfile, 'id' | 'created_at' | 'last_active_at' | 'current_level' | 'total_xp' | 'words_learned'>,
   ): Promise<KidProfile> {
+    const { data: { session } } = await supabase.auth.getSession();
+    const parentId = session?.user?.id;
+
     const profile: KidProfile = {
       id: generateId(),
+      parent_id: parentId,
       name: data.name,
       age: data.age,
       gender: data.gender,

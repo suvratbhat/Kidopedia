@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Volume2, Heart, ArrowLeft, AlertCircle } from 'lucide-react-native';
+import { Heart, ArrowLeft, AlertCircle } from 'lucide-react-native';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
+import { MasteryBadge } from '../../components/MasteryBadge';
 import { databaseService } from '../../services/databaseService';
 import { profileService } from '@/services/profileService';
-import { pronunciationService } from '../../services/pronunciationService';
+import { PronounceButton } from '../../components/PronounceButton';
 import { contentFilterService } from '../../services/contentFilterService';
+import { customWordsService } from '../services/customWordsService';
+import { masteryService, MasteryTier } from '@/services/masteryService';
 import { useProfile } from '@/contexts/ProfileContext';
 import { CachedWord } from '../../types/dictionary';
 
@@ -16,8 +19,8 @@ export default function WordDetailScreen() {
   const { activeProfile } = useProfile();
   const [word, setWord] = useState<CachedWord | null>(null);
   const [isFavorite, setIsFavorite] = useState(false);
+  const [masteryTier, setMasteryTier] = useState<MasteryTier>('seen');
   const [isLoading, setIsLoading] = useState(true);
-  const [isSpeaking, setIsSpeaking] = useState(false);
 
   useEffect(() => {
     loadWord();
@@ -28,6 +31,21 @@ export default function WordDetailScreen() {
       if (!id) return;
 
       const decodedWord = decodeURIComponent(id);
+      
+      // Check custom words first if profile is active
+      if (activeProfile) {
+        const customWord = await customWordsService.getCustomWordByText(activeProfile.id, decodedWord);
+        if (customWord) {
+          setWord(customWordsService.mapToCachedWord(customWord));
+          await profileService.trackWordView(activeProfile.id, customWord.word);
+          const progress = await profileService.getWordProgress(activeProfile.id);
+          const wordProgress = progress.find(p => p.word === customWord.word);
+          setIsFavorite(wordProgress?.is_favorite || false);
+          setIsLoading(false);
+          return;
+        }
+      }
+
       const wordData = await databaseService.getWordDetails(decodedWord);
       setWord(wordData);
 
@@ -41,19 +59,6 @@ export default function WordDetailScreen() {
       console.error('Error loading word:', error);
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const handlePronounce = async () => {
-    if (!word || isSpeaking) return;
-
-    try {
-      setIsSpeaking(true);
-      await pronunciationService.speak(word.word, 'en-US');
-    } catch (error) {
-      console.error('Pronunciation error:', error);
-    } finally {
-      setTimeout(() => setIsSpeaking(false), 1000);
     }
   };
 
@@ -139,16 +144,7 @@ export default function WordDetailScreen() {
 
           {word.phonetic && <Text style={styles.phonetic}>{word.phonetic}</Text>}
 
-          <TouchableOpacity
-            style={[styles.pronounceButton, isSpeaking && styles.pronounceButtonActive]}
-            onPress={handlePronounce}
-            disabled={isSpeaking}
-          >
-            <Volume2 size={24} color="#FFFFFF" />
-            <Text style={styles.pronounceText}>
-              {isSpeaking ? 'Speaking...' : 'Pronounce'}
-            </Text>
-          </TouchableOpacity>
+          <PronounceButton word={word.word} audioUrl={word.audio_url} />
         </View>
 
         {(word.kannada_translation || word.hindi_translation) && (
@@ -265,24 +261,6 @@ const styles = StyleSheet.create({
     color: '#666',
     marginBottom: 8,
     fontStyle: 'italic',
-  },
-  pronounceButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#4ECDC4',
-    borderRadius: 16,
-    padding: 16,
-    marginTop: 12,
-    gap: 12,
-  },
-  pronounceButtonActive: {
-    backgroundColor: '#95E1D3',
-  },
-  pronounceText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#FFFFFF',
   },
   section: {
     backgroundColor: '#FFFFFF',

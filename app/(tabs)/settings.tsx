@@ -1,20 +1,40 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Modal, TextInput, Image } from 'react-native';
 import { KidButton } from '../../components/KidButton';
+import ProfileCard from '../../components/ProfileCard';
 import { offlineStorageService } from '../../services/offlineStorageService';
 import { offlineDownloadService, DownloadProgress } from '../../services/offlineDownloadService';
 import { syncService } from '../../services/syncService';
 import { pronunciationService } from '../../services/pronunciationService';
 import { connectionTestService } from '../../services/connectionTestService';
+import { avatarService } from '../../services/avatarService';
+import { notificationService } from '../../services/notificationService';
+import { customWordsService, CustomWord } from '../services/customWordsService';
+import { AddWordForm } from '../components/AddWordForm';
+import { useProfile } from '../../contexts/ProfileContext';
+import { KidProfile } from '../../types/profile';
 import { SyncStatus } from '../../types/sync';
 import {
   Volume2, Calendar, Info, BookOpen, Download, Trash2,
-  Activity, RefreshCw, XCircle,
+  Activity, RefreshCw, XCircle, Users, Plus, User, Shuffle, Check, Bell, BookPlus
 } from 'lucide-react-native';
 
 export default function SettingsScreen() {
+  const { profiles, activeProfile, createProfile, updateProfile, deleteProfile, setActiveProfile } = useProfile();
+  
+  // Profile Form State
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [editingProfile, setEditingProfile] = useState<KidProfile | null>(null);
+  const [name, setName] = useState('');
+  const [age, setAge] = useState('');
+  const [gender, setGender] = useState<'boy' | 'girl' | 'other'>('boy');
+  const [selectedColor, setSelectedColor] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState('');
+  const [availableColors, setAvailableColors] = useState<string[]>([]);
+
   const [wordCount, setWordCount] = useState(0);
   const [pronunciationSpeed, setPronunciationSpeed] = useState(0.75);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [downloadStatus, setDownloadStatus] = useState({
     isDownloaded: false,
     totalWords: 10000,
@@ -25,6 +45,158 @@ export default function SettingsScreen() {
   const [downloadProgress, setDownloadProgress] = useState<DownloadProgress | null>(null);
   const [storageSize, setStorageSize] = useState('0 B');
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
+  const [customWords, setCustomWords] = useState<CustomWord[]>([]);
+
+  useEffect(() => {
+    loadSettings();
+    offlineDownloadService.setProgressCallback(handleProgressUpdate);
+  }, []);
+
+  useEffect(() => {
+    if (activeProfile) {
+      customWordsService.getCustomWords(activeProfile.id).then(setCustomWords);
+    }
+  }, [activeProfile]);
+
+  useEffect(() => {
+    if (showProfileModal) {
+      updateAvatarForGender(gender);
+    }
+  }, [gender, showProfileModal]);
+
+  const updateAvatarForGender = (newGender: 'boy' | 'girl' | 'other') => {
+    const colors = avatarService.getColorPalette(newGender);
+    setAvailableColors(colors);
+    if (!selectedColor || !colors.includes(selectedColor)) {
+      setSelectedColor(avatarService.getRandomColor(newGender));
+    }
+    if (!avatarUrl) {
+      setAvatarUrl(avatarService.getRandomAvatarUrl(newGender));
+    }
+  };
+
+  const generateNewAvatar = () => {
+    setAvatarUrl(avatarService.getRandomAvatarUrl(gender));
+  };
+
+  const handleSaveProfile = async () => {
+    if (!name.trim()) {
+      Alert.alert('Error', 'Please enter a name');
+      return;
+    }
+    if (!age || parseInt(age) < 2 || parseInt(age) > 18) {
+      Alert.alert('Error', 'Please enter a valid age (2-18)');
+      return;
+    }
+
+    try {
+      if (editingProfile) {
+        await updateProfile(editingProfile.id, {
+          name: name.trim(),
+          age: parseInt(age),
+          gender,
+          avatar_color: selectedColor,
+          avatar_url: avatarUrl,
+        });
+      } else {
+        if (profiles.length >= 4) {
+          Alert.alert('Limit Reached', 'You can have up to 4 profiles per account.');
+          return;
+        }
+        await createProfile({
+          name: name.trim(),
+          age: parseInt(age),
+          gender,
+          avatar_color: selectedColor,
+          avatar_url: avatarUrl,
+        });
+      }
+      setShowProfileModal(false);
+      resetProfileForm();
+    } catch (error) {
+      Alert.alert('Error', 'Failed to save profile');
+      console.error(error);
+    }
+  };
+
+  const resetProfileForm = () => {
+    setName('');
+    setAge('');
+    setGender('boy');
+    setSelectedColor('');
+    setAvatarUrl('');
+    setEditingProfile(null);
+  };
+
+  const openAddProfile = () => {
+    resetProfileForm();
+    setShowProfileModal(true);
+  };
+
+  const openEditProfile = (profile: KidProfile) => {
+    setEditingProfile(profile);
+    setName(profile.name);
+    setAge(profile.age.toString());
+    setGender(profile.gender);
+    setSelectedColor(profile.avatar_color);
+    setAvatarUrl(profile.avatar_url || '');
+    setAvailableColors(avatarService.getColorPalette(profile.gender));
+    setShowProfileModal(true);
+  };
+
+  const handleDeleteProfile = (profile: KidProfile) => {
+    if (profiles.length <= 1) {
+      Alert.alert('Cannot Delete', 'You must have at least one profile.');
+      return;
+    }
+
+    Alert.alert(
+      'Delete Profile',
+      `Are you sure you want to delete ${profile.name}'s profile? All progress will be lost.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteProfile(profile.id);
+            } catch (error) {
+              Alert.alert('Error', 'Failed to delete profile');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDeleteCustomWord = async (wordId: string) => {
+    Alert.alert(
+      'Delete Word',
+      'Are you sure you want to remove this word from your list?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            const success = await customWordsService.deleteCustomWord(wordId);
+            if (success && activeProfile) {
+              const cw = await customWordsService.getCustomWords(activeProfile.id);
+              setCustomWords(cw);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleWordAdded = async () => {
+    if (activeProfile) {
+      const cw = await customWordsService.getCustomWords(activeProfile.id);
+      setCustomWords(cw);
+    }
+  };
 
   useEffect(() => {
     loadSettings();
@@ -54,8 +226,20 @@ export default function SettingsScreen() {
 
       const sync = await syncService.getSyncStatus();
       setSyncStatus(sync);
+
+      const notifyEnabled = await notificationService.isNotificationsEnabled();
+      setNotificationsEnabled(notifyEnabled);
     } catch (error) {
       console.error('Error loading settings:', error);
+    }
+  };
+
+  const handleToggleNotifications = async () => {
+    const newValue = !notificationsEnabled;
+    await notificationService.setNotificationsEnabled(newValue);
+    setNotificationsEnabled(newValue);
+    if (newValue) {
+      Alert.alert('Notifications Enabled', 'You will receive a fresh word every morning at 8:00 AM!');
     }
   };
 
@@ -240,6 +424,80 @@ export default function SettingsScreen() {
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+
+        {/* ── Kid Profiles ────────────────────────────────────────────────── */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Users size={24} color="#6366F1" />
+            <Text style={styles.sectionTitle}>Kid Profiles</Text>
+            {profiles.length < 4 && (
+              <TouchableOpacity style={styles.addSmallButton} onPress={openAddProfile}>
+                <Plus size={20} color="#6366F1" />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <View style={styles.profileList}>
+            {profiles.map((profile) => (
+              <ProfileCard
+                key={profile.id}
+                profile={profile}
+                isActive={activeProfile?.id === profile.id}
+                onSelect={setActiveProfile}
+                onEdit={openEditProfile}
+                onDelete={handleDeleteProfile}
+              />
+            ))}
+          </View>
+
+          {profiles.length < 4 && (
+            <KidButton
+              title="Add Profile"
+              onPress={openAddProfile}
+              variant="secondary"
+              size="medium"
+              icon={<Plus size={20} color="#6366F1" />}
+            />
+          )}
+          <Text style={styles.limitHint}>Manage up to 4 profiles per account</Text>
+        </View>
+
+        {/* ── Custom Vocabulary ───────────────────────────────────────────── */}
+        {activeProfile && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <BookPlus size={24} color="#42A5F5" />
+              <Text style={styles.sectionTitle}>Custom Vocabulary</Text>
+            </View>
+
+            <AddWordForm 
+              profileId={activeProfile.id} 
+              onWordAdded={handleWordAdded} 
+            />
+
+            {customWords.length > 0 && (
+              <View style={styles.customWordsList}>
+                <Text style={styles.subSectionTitle}>Your Added Words ({customWords.length})</Text>
+                {customWords.map((word) => (
+                  <View key={word.id} style={styles.customWordItem}>
+                    <View style={styles.customWordInfo}>
+                      <Text style={styles.customWordText}>{word.word}</Text>
+                      <Text style={styles.customWordDef} numberOfLines={1}>
+                        {word.definition}
+                      </Text>
+                    </View>
+                    <TouchableOpacity 
+                      onPress={() => handleDeleteCustomWord(word.id)}
+                      style={styles.deleteWordButton}
+                    >
+                      <Trash2 size={18} color="#EF4444" />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+        )}
 
         {/* ── Dictionary Sync ──────────────────────────────────────────────── */}
         <View style={styles.section}>
@@ -451,6 +709,48 @@ export default function SettingsScreen() {
           </View>
         </View>
 
+        {/* ── Notifications ────────────────────────────────────────────────── */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Bell size={24} color="#F59E0B" />
+            <Text style={styles.sectionTitle}>Notifications</Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.infoLabel}>Word of the Day</Text>
+              <Text style={styles.downloadDescription}>
+                Get a fresh, fun word every morning at 8:00 AM.
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={[
+                styles.genderButton,
+                { flex: 0, paddingHorizontal: 20 },
+                notificationsEnabled && styles.genderButtonActive,
+              ]}
+              onPress={handleToggleNotifications}
+            >
+              <Text style={[
+                styles.genderButtonText,
+                notificationsEnabled && styles.genderButtonTextActive,
+              ]}>
+                {notificationsEnabled ? 'ON' : 'OFF'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+          
+          {notificationsEnabled && (
+            <KidButton
+              title="Send Test Notification"
+              onPress={() => notificationService.sendTestNotification()}
+              variant="secondary"
+              size="small"
+              style={{ marginTop: 12 }}
+            />
+          )}
+        </View>
+
         {/* ── Privacy ──────────────────────────────────────────────────────── */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -500,6 +800,127 @@ export default function SettingsScreen() {
 
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      {/* ── Profile Modal ────────────────────────────────────────────────── */}
+      <Modal
+        visible={showProfileModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowProfileModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>
+              {editingProfile ? 'Edit Profile' : 'Create Profile'}
+            </Text>
+
+            <View style={styles.avatarPreviewContainer}>
+              <View style={[styles.avatarPreview, { backgroundColor: selectedColor || '#E2E8F0' }]}>
+                {avatarUrl ? (
+                  <Image
+                    source={{ uri: avatarUrl }}
+                    style={styles.avatarImage}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <User size={48} color="#FFFFFF" />
+                )}
+              </View>
+              <TouchableOpacity style={styles.shuffleButton} onPress={generateNewAvatar}>
+                <Shuffle size={20} color="#3B82F6" />
+                <Text style={styles.shuffleText}>Change Avatar</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Name</Text>
+              <TextInput
+                style={styles.input}
+                value={name}
+                onChangeText={setName}
+                placeholder="Enter name"
+                placeholderTextColor="#94A3B8"
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Age</Text>
+              <TextInput
+                style={styles.input}
+                value={age}
+                onChangeText={setAge}
+                placeholder="Enter age (2-18)"
+                placeholderTextColor="#94A3B8"
+                keyboardType="number-pad"
+                maxLength={2}
+              />
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Gender</Text>
+              <View style={styles.genderButtons}>
+                {(['boy', 'girl', 'other'] as const).map((g) => (
+                  <TouchableOpacity
+                    key={g}
+                    style={[
+                      styles.genderButton,
+                      gender === g && styles.genderButtonActive,
+                    ]}
+                    onPress={() => setGender(g)}
+                  >
+                    <Text
+                      style={[
+                        styles.genderButtonText,
+                        gender === g && styles.genderButtonTextActive,
+                      ]}
+                    >
+                      {g.charAt(0).toUpperCase() + g.slice(1)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Avatar Background Color</Text>
+              <View style={styles.colorPicker}>
+                {availableColors.map((color) => (
+                  <TouchableOpacity
+                    key={color}
+                    style={[
+                      styles.colorOption,
+                      { backgroundColor: color },
+                      selectedColor === color && styles.colorOptionSelected,
+                    ]}
+                    onPress={() => setSelectedColor(color)}
+                  >
+                    {selectedColor === color && (
+                      <Check size={20} color="#FFFFFF" />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setShowProfileModal(false)}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.saveButton}
+                onPress={handleSaveProfile}
+              >
+                <Text style={styles.saveButtonText}>
+                  {editingProfile ? 'Update' : 'Create'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -549,10 +970,68 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     gap: 12,
   },
+  addSmallButton: {
+    marginLeft: 'auto',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   sectionTitle: {
     fontSize: 20,
     fontWeight: '700',
     color: '#333',
+  },
+  profileList: {
+    marginBottom: 16,
+  },
+  limitHint: {
+    fontSize: 12,
+    color: '#94A3B8',
+    textAlign: 'center',
+    marginTop: 12,
+  },
+  customWordsList: {
+    marginTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    paddingTop: 16,
+  },
+  subSectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#475569',
+    marginBottom: 12,
+  },
+  customWordItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  customWordInfo: {
+    flex: 1,
+  },
+  customWordText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1E293B',
+    textTransform: 'capitalize',
+  },
+  customWordDef: {
+    fontSize: 13,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  deleteWordButton: {
+    padding: 8,
+    marginLeft: 8,
   },
   syncRow: {
     flexDirection: 'row',
@@ -753,5 +1232,148 @@ const styles = StyleSheet.create({
     color: '#999',
     textAlign: 'center',
     fontStyle: 'italic',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    maxHeight: '90%',
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#1E293B',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  avatarPreviewContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  avatarPreview: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  shuffleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    backgroundColor: '#F1F5F9',
+  },
+  shuffleText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#3B82F6',
+  },
+  formGroup: {
+    marginBottom: 16,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#475569',
+    marginBottom: 6,
+  },
+  input: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 16,
+    color: '#1E293B',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  genderButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  genderButton: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
+  },
+  genderButtonActive: {
+    backgroundColor: '#3B82F6',
+    borderColor: '#3B82F6',
+  },
+  genderButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  genderButtonTextActive: {
+    color: '#FFFFFF',
+  },
+  colorPicker: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    justifyContent: 'center',
+  },
+  colorOption: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  colorOptionSelected: {
+    borderColor: '#1E293B',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 24,
+  },
+  cancelButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  saveButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#6366F1',
+    alignItems: 'center',
+  },
+  saveButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
 });

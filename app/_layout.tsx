@@ -32,7 +32,20 @@ export default function RootLayout() {
       // 3. Push any profiles that were created/updated offline
       localProfileService.pushUnsyncedProfiles().catch(() => {});
 
-      // 4. Check 90-day sync schedule — fire-and-forget
+      // 4. Check if we have profiles. If not, go to profile creation.
+      const allProfiles = await localProfileService.getAllProfiles();
+      const activeId = await localProfileService.getActiveProfileId();
+      
+      if (allProfiles.length === 0) {
+        router.replace('/profiles' as any);
+        return;
+      } else if (!activeId) {
+        // If we have profiles but none is active, also go to switcher
+        router.replace('/profiles' as any);
+        return;
+      }
+
+      // 5. Check 90-day sync schedule — fire-and-forget
       if (await syncService.isSyncNeeded()) {
         syncService.startSync().catch(console.error);
       }
