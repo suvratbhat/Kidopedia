@@ -8,12 +8,13 @@ import { syncService } from '../../services/syncService';
 import { pronunciationService } from '../../services/pronunciationService';
 import { connectionTestService } from '../../services/connectionTestService';
 import { avatarService } from '../../services/avatarService';
+import { notificationService } from '../../services/notificationService';
 import { useProfile } from '../../contexts/ProfileContext';
 import { KidProfile } from '../../types/profile';
 import { SyncStatus } from '../../types/sync';
 import {
   Volume2, Calendar, Info, BookOpen, Download, Trash2,
-  Activity, RefreshCw, XCircle, Users, Plus, User, Shuffle, Check
+  Activity, RefreshCw, XCircle, Users, Plus, User, Shuffle, Check, Bell
 } from 'lucide-react-native';
 
 export default function SettingsScreen() {
@@ -31,6 +32,7 @@ export default function SettingsScreen() {
 
   const [wordCount, setWordCount] = useState(0);
   const [pronunciationSpeed, setPronunciationSpeed] = useState(0.75);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [downloadStatus, setDownloadStatus] = useState({
     isDownloaded: false,
     totalWords: 10000,
@@ -187,8 +189,20 @@ export default function SettingsScreen() {
 
       const sync = await syncService.getSyncStatus();
       setSyncStatus(sync);
+
+      const notifyEnabled = await notificationService.isNotificationsEnabled();
+      setNotificationsEnabled(notifyEnabled);
     } catch (error) {
       console.error('Error loading settings:', error);
+    }
+  };
+
+  const handleToggleNotifications = async () => {
+    const newValue = !notificationsEnabled;
+    await notificationService.setNotificationsEnabled(newValue);
+    setNotificationsEnabled(newValue);
+    if (newValue) {
+      Alert.alert('Notifications Enabled', 'You will receive a fresh word every morning at 8:00 AM!');
     }
   };
 
@@ -619,6 +633,48 @@ export default function SettingsScreen() {
               </Text>
             </TouchableOpacity>
           </View>
+        </View>
+
+        {/* ── Notifications ────────────────────────────────────────────────── */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Bell size={24} color="#F59E0B" />
+            <Text style={styles.sectionTitle}>Notifications</Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.infoLabel}>Word of the Day</Text>
+              <Text style={styles.downloadDescription}>
+                Get a fresh, fun word every morning at 8:00 AM.
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={[
+                styles.genderButton,
+                { flex: 0, paddingHorizontal: 20 },
+                notificationsEnabled && styles.genderButtonActive,
+              ]}
+              onPress={handleToggleNotifications}
+            >
+              <Text style={[
+                styles.genderButtonText,
+                notificationsEnabled && styles.genderButtonTextActive,
+              ]}>
+                {notificationsEnabled ? 'ON' : 'OFF'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+          
+          {notificationsEnabled && (
+            <KidButton
+              title="Send Test Notification"
+              onPress={() => notificationService.sendTestNotification()}
+              variant="secondary"
+              size="small"
+              style={{ marginTop: 12 }}
+            />
+          )}
         </View>
 
         {/* ── Privacy ──────────────────────────────────────────────────────── */}

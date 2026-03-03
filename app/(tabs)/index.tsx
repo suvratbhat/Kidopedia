@@ -7,6 +7,7 @@ import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { CategoryCard } from '../../components/CategoryCard';
 import { LevelBanner } from '../../components/LevelBanner';
 import { AchievementBadge } from '../../components/AchievementBadge';
+import { DailyWordCard } from '../../components/DailyWordCard';
 import { KidButton } from '../../components/KidButton';
 import ProfileSwitcher from '../../components/ProfileSwitcher';
 import { databaseService } from '../../services/databaseService';
@@ -14,9 +15,10 @@ import { offlineStorageService } from '../../services/offlineStorageService';
 import { profileService } from '../../services/profileService';
 import { contentFilterService } from '../../services/contentFilterService';
 import { badgesService, Badge } from '../../services/badgesService';
+import { notificationService } from '../../services/notificationService';
 import { useProfile } from '@/contexts/ProfileContext';
 import { CachedWord } from '../../types/dictionary';
-import { Sparkles, Rocket, Heart, Apple, Zap, Gamepad2, User, AlertCircle } from 'lucide-react-native';
+import { Sparkles, Rocket, Heart, Apple, Zap, Gamepad2, User, AlertCircle, Sun } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 export default function SearchScreen() {
@@ -29,6 +31,7 @@ export default function SearchScreen() {
   const [favoriteCount, setFavoriteCount] = useState(0);
   const [streakData, setStreakData] = useState({ current: 0, longest: 0 });
   const [showContentBlockedMessage, setShowContentBlockedMessage] = useState(false);
+  const [dailyWord, setDailyWord] = useState<CachedWord | null>(null);
   
   // Badge Celebration State
   const [newBadges, setNewBadges] = useState<Badge[]>([]);
@@ -39,6 +42,7 @@ export default function SearchScreen() {
     loadProfileData();
     if (activeProfile) {
       checkNewBadges();
+      loadDailyWord();
     }
   }, [activeProfile]);
 
@@ -66,6 +70,25 @@ export default function SearchScreen() {
       }
     } catch (error) {
       console.error('Error loading profile data:', error);
+    }
+  };
+
+  const loadDailyWord = async () => {
+    if (!activeProfile) return;
+    try {
+      const complexity = Math.min(10, Math.max(1, Math.round(activeProfile.age * 0.8)));
+      const word = await databaseService.getDailyWord(complexity);
+      setDailyWord(word);
+      
+      if (word) {
+        // Schedule/refresh notification if word is found
+        const enabled = await notificationService.isNotificationsEnabled();
+        if (enabled) {
+          await notificationService.scheduleDailyWordNotification(word.word, "✨");
+        }
+      }
+    } catch (error) {
+      console.error('Error loading daily word:', error);
     }
   };
 
@@ -219,6 +242,17 @@ export default function SearchScreen() {
 
       {searchQuery.length === 0 ? (
         <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          {dailyWord && (
+            <View style={styles.section}>
+              <DailyWordCard
+                word={dailyWord}
+                theme={theme}
+                onPress={handleWordPress}
+                definition={getFirstDefinition(dailyWord.meanings)}
+              />
+            </View>
+          )}
+
           <View style={styles.section}>
             <LevelBanner
               level={activeProfile?.current_level || 1}

@@ -364,6 +364,28 @@ export class DatabaseService {
   async searchWord(word: string): Promise<CachedWord | null> {
     return this.getWordDetails(word);
   }
+
+  async getDailyWord(complexityLevel: number): Promise<CachedWord | null> {
+    const today = new Date().toISOString().split('T')[0];
+
+    const { data, error } = await supabase
+      .from('daily_words')
+      .select('*, cached_words(*)')
+      .eq('display_date', today)
+      .eq('complexity_level', complexityLevel)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Error fetching daily word:', error);
+      return null;
+    }
+
+    if (!data || !data.cached_words) {
+      return null;
+    }
+
+    return data.cached_words as CachedWord;
+  }
 }
 
 export const databaseService = new DatabaseService();
