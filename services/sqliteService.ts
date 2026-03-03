@@ -141,6 +141,8 @@ CREATE TABLE IF NOT EXISTS word_progress (
   word           TEXT NOT NULL COLLATE NOCASE,
   times_viewed   INTEGER NOT NULL DEFAULT 1,
   is_favorite    INTEGER NOT NULL DEFAULT 0,
+  attempt_count  INTEGER NOT NULL DEFAULT 0,
+  correct_count  INTEGER NOT NULL DEFAULT 0,
   last_viewed_at TEXT NOT NULL DEFAULT (datetime('now')),
   created_at     TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE(profile_id, word)
@@ -189,6 +191,29 @@ CREATE TABLE IF NOT EXISTS sync_metadata (
 );
 `;
 
+// ─── Migrations ───────────────────────────────────────────────────────────────
+
+/**
+ * Idempotent column additions for schema upgrades on existing databases.
+ * SQLite does not support "ADD COLUMN IF NOT EXISTS", so we check PRAGMA first.
+ */
+async function _runMigrations(database: SQLite.SQLiteDatabase): Promise<void> {
+  const cols = await database.getAllAsync<{ name: string }>(
+    `PRAGMA table_info(word_progress)`,
+  );
+  const colNames = new Set(cols.map((c) => c.name));
+  if (!colNames.has('attempt_count')) {
+    await database.execAsync(
+      `ALTER TABLE word_progress ADD COLUMN attempt_count INTEGER NOT NULL DEFAULT 0;`,
+    );
+  }
+  if (!colNames.has('correct_count')) {
+    await database.execAsync(
+      `ALTER TABLE word_progress ADD COLUMN correct_count INTEGER NOT NULL DEFAULT 0;`,
+    );
+  }
+}
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 export const sqliteService = {
@@ -199,7 +224,9 @@ export const sqliteService = {
     db = await SQLite.openDatabaseAsync('kidopedia.db');
     await db.execAsync(DDL);
     await this.seedAchievements(BUILT_IN_ACHIEVEMENTS);
-    await this.setSyncMeta('db_schema_version', '1');
+    // Migrate existing databases: add mastery columns if they don't exist yet
+    await _runMigrations(db);
+    await this.setSyncMeta('db_schema_version', '2');
     console.log('[SQLite] Database initialized');
   },
 
@@ -496,6 +523,75 @@ export const sqliteService = {
       [profileId],
     );
     return row?.cnt ?? 0;
+  },
+
+  /**
+   * Fetch a single word_progress row for mastery data.
+   * Returns null if the word has never been viewed or quizzed.
+   */
+  async getSingleWordProgress(
+    profileId: string,
+    word: string,
+  ): Promise<(import('@/types/profile').WordProgress & { attempt_count: number; correct_count: number }) | null> {
+    const row = await getDb().getFirstAsync<Record<string, unknown>>(
+      `SELECT * FROM word_progress WHERE profile_id = ? AND word = ? COLLATE NOCASE`,
+      [profileId, word.toLowerCase()],
+    );
+    if (!row) return null;
+    return {
+      id: row.id as string,
+      profile_id: row.profile_id as string,
+      word: row.word as string,
+      times_viewed: row.times_viewed as number,
+      is_favorite: (row.is_favorite as number) === 1,
+      attempt_count: (row.attempt_count as number) ?? 0,
+      correct_count: (row.correct_count as number) ?? 0,
+      last_viewed_at: row.last_viewed_at as string,
+      created_at: (row.created_at as string) ?? '',
+    };
+  },
+
+  /**
+   * Record a quiz attempt for a word, creating or updating the progress row.
+   * Increments attempt_count always; increments correct_count only when correct.
+   */
+  async upsertWordProgressAttempt(
+    profileId: string,
+    word: string,
+    correct: boolean,
+  ): Promise<void> {
+    const existing = await getDb().getFirstAsync<{
+      id: string;
+      times_viewed: number;
+      attempt_count: number;
+      correct_count: number;
+    }>(
+      `SELECT id, times_viewed, attempt_count, correct_count
+       FROM word_progress WHERE profile_id = ? AND word = ? COLLATE NOCASE`,
+      [profileId, word.toLowerCase()],
+    );
+
+    if (existing) {
+      await getDb().runAsync(
+        `UPDATE word_progress
+         SET attempt_count = ?, correct_count = ?, last_viewed_at = ?
+         WHERE id = ?`,
+        [
+          existing.attempt_count + 1,
+          existing.correct_count + (correct ? 1 : 0),
+          now(),
+          existing.id,
+        ],
+      );
+    } else {
+      await getDb().runAsync(
+        `INSERT INTO word_progress
+           (id, profile_id, word, times_viewed, is_favorite,
+            attempt_count, correct_count, last_viewed_at, created_at)
+         VALUES (?, ?, ?, 0, 0, 1, ?, ?, ?)`,
+        [generateId(), profileId, word.toLowerCase(), correct ? 1 : 0, now(), now()],
+      );
+    }
   },
 
   // ── Achievements ───────────────────────────────────────────────────────────

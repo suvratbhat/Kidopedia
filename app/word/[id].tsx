@@ -3,10 +3,12 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-nati
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Volume2, Heart, ArrowLeft, AlertCircle } from 'lucide-react-native';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
+import { MasteryBadge } from '../../components/MasteryBadge';
 import { databaseService } from '../../services/databaseService';
 import { profileService } from '@/services/profileService';
 import { pronunciationService } from '../../services/pronunciationService';
 import { contentFilterService } from '../../services/contentFilterService';
+import { masteryService, MasteryTier } from '@/services/masteryService';
 import { useProfile } from '@/contexts/ProfileContext';
 import { CachedWord } from '../../types/dictionary';
 
@@ -16,6 +18,7 @@ export default function WordDetailScreen() {
   const { activeProfile } = useProfile();
   const [word, setWord] = useState<CachedWord | null>(null);
   const [isFavorite, setIsFavorite] = useState(false);
+  const [masteryTier, setMasteryTier] = useState<MasteryTier>('seen');
   const [isLoading, setIsLoading] = useState(true);
   const [isSpeaking, setIsSpeaking] = useState(false);
 
